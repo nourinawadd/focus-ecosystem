@@ -1,141 +1,129 @@
+import { useState, useRef, useCallback } from 'react';
+import { SessionRecord, SEED_SESSIONS } from './store/sessions';
+import { UserProfile, DEFAULT_USER } from './store/user';
+import { View, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TouchableOpacity, Platform } from 'react-native';
+import SignUpScreen from './screens/SignUpScreen';
+import LoginScreen from './screens/LoginScreen';
+import DashboardScreen from './screens/DashboardScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import CreateSessionScreen from './screens/CreateSessionScreen';
+import NFCScreen from './screens/NFCScreen';
+import ActiveSessionScreen from './screens/ActiveSessionScreen';
+import SessionCompleteScreen from './screens/SessionCompleteScreen';
+import HistoryScreen from './screens/HistoryScreen';
+import AnalyticsScreen from './screens/AnalyticsScreen';
+import ComingSoonScreen from './screens/ComingSoonScreen';
+import Drawer from './components/Drawer';
+
+export type ScreenName =
+  | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
+  | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
+  | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
+
+export type NavParams = Record<string, string>;
+export type NavProps = {
+  navigate:      (screen: ScreenName, params?: NavParams) => void;
+  replace:       (screen: ScreenName, params?: NavParams) => void;
+  params:        NavParams;
+  openDrawer:    () => void;
+  // ── Session store ──────────────────────────────────────────────────────────
+  sessions:      SessionRecord[];
+  addSession:    (s: SessionRecord) => void;
+  deleteSession: (id: string) => void;
+  // ── User / preferences ─────────────────────────────────────────────────────
+  user:          UserProfile;
+  updateUser:    (updates: Partial<UserProfile>) => void;
+};
+
+export type { SessionRecord, UserProfile };
+
+const COMING_SOON: ScreenName[] = ['AIInsights', 'NFCSetup'];
+const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
 export default function App() {
+  const [current,    setCurrent]    = useState<ScreenName>('SignUp');
+  const [params,     setParams]     = useState<NavParams>({});
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sessions,   setSessions]   = useState<SessionRecord[]>(SEED_SESSIONS);
+  const [user,       setUser]       = useState<UserProfile>(DEFAULT_USER);
+
+  const addSession = useCallback(
+    (s: SessionRecord) => setSessions(prev => [s, ...prev]),
+    [],
+  );
+  const deleteSession = useCallback(
+    (id: string) => setSessions(prev => prev.filter(s => s.id !== id)),
+    [],
+  );
+  const updateUser = useCallback(
+    (updates: Partial<UserProfile>) => setUser(prev => ({ ...prev, ...updates })),
+    [],
+  );
+
+  // ── Cross-screen fade transition ────────────────────────────────────────────
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const navigate = useCallback((screen: ScreenName, p?: NavParams) => {
+    // Fade out → swap screen → fade in
+    Animated.timing(fadeAnim, { toValue: 0, duration: 110, useNativeDriver: true }).start(() => {
+      if (p) setParams(prev => ({ ...prev, ...p }));
+      setCurrent(screen);
+      setDrawerOpen(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    });
+  }, [fadeAnim]);
+
+  const signOut = useCallback(() => {
+    setParams({});
+    setDrawerOpen(false);
+    navigate('Login');
+  }, [navigate]);
+
+  const nav: NavProps = {
+    navigate,
+    replace:       navigate,
+    params,
+    openDrawer:    () => setDrawerOpen(true),
+    sessions,
+    addSession,
+    deleteSession,
+    user,
+    updateUser,
+  };
+
   return (
-    <View style={styles.container}>
-      <StatusBar style="dark" />
+    <View style={{ flex: 1 }}>
+      <StatusBar style={DARK_STATUS.includes(current) ? 'light' : 'dark'} />
 
-      {/* Greeting */}
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Good evening,</Text>
-        <Text style={styles.name}>Alex</Text>
-      </View>
+      {/* All screens fade as one unit */}
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        {current === 'SignUp'          && <SignUpScreen nav={nav} />}
+        {current === 'Login'           && <LoginScreen nav={nav} />}
+        {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
+        {current === 'Profile'         && <ProfileScreen nav={nav} />}
+        {current === 'Settings'        && <SettingsScreen nav={nav} />}
+        {current === 'CreateSession'   && <CreateSessionScreen nav={nav} />}
+        {current === 'NFCScan'         && <NFCScreen nav={nav} />}
+        {current === 'ActiveSession'    && <ActiveSessionScreen nav={nav} />}
+        {current === 'SessionComplete'  && <SessionCompleteScreen nav={nav} />}
+        {current === 'History'          && <HistoryScreen nav={nav} />}
+        {current === 'Analytics'        && <AnalyticsScreen nav={nav} />}
+        {COMING_SOON.includes(current)  && <ComingSoonScreen nav={nav} screen={current} />}
+      </Animated.View>
 
-      {/* Focus Score Card */}
-      <View style={styles.scoreCard}>
-        <Text style={styles.scoreLabel}>Focus Score</Text>
-        <Text style={styles.scoreValue}>
-          84<Text style={styles.scoreMax}>/100</Text>
-        </Text>
-      </View>
-
-      {/* Streak Card */}
-      <View style={styles.streakCard}>
-        <Text style={styles.streakTitle}>🔥 7-day streak</Text>
-        <Text style={styles.streakSub}>Keep it up!</Text>
-      </View>
-
-      {/* Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>24.5h</Text>
-          <Text style={styles.statLabel}>This Week</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>87%</Text>
-          <Text style={styles.statLabel}>Complete</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>7 PM</Text>
-          <Text style={styles.statLabel}>Best Time</Text>
-        </View>
-      </View>
-
-      {/* Start Button */}
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>Start Focus Session</Text>
-      </TouchableOpacity>
+      {/* Drawer sits above the fade layer so it slides independently */}
+      {!NO_DRAWER.includes(current) && (
+        <Drawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          currentScreen={current}
+          nav={nav}
+          onSignOut={signOut}
+        />
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  greeting: {
-    fontSize: 16,
-    color: '#666',
-  },
-  name: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111',
-  },
-  scoreCard: {
-    backgroundColor: '#111',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 14,
-  },
-  scoreLabel: {
-    color: '#aaa',
-    fontSize: 13,
-    marginBottom: 6,
-  },
-  scoreValue: {
-    color: '#fff',
-    fontSize: 42,
-    fontWeight: 'bold',
-  },
-  scoreMax: {
-    fontSize: 20,
-    fontWeight: 'normal',
-    color: '#aaa',
-  },
-  streakCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-  },
-  streakTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-    marginBottom: 4,
-  },
-  streakSub: {
-    fontSize: 13,
-    color: '#888',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#888',
-  },
-  button: {
-    backgroundColor: '#111',
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
