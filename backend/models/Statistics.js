@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const StatisticsSchema = new mongoose.Schema({
   userId: {
@@ -92,4 +92,4 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, option
   );
 };
 
-module.exports = mongoose.model('Statistics', StatisticsSchema);
+export default mongoose.model('Statistics', StatisticsSchema);
