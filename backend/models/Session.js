@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const TimerConfigSchema = new mongoose.Schema({
   plannedDuration:   { type: Number, required: true },  
@@ -73,4 +73,4 @@ SessionSchema.statics.toFrontendRecord = function (doc) {
   };
 };
 
-module.exports = mongoose.model('Session', SessionSchema);
+export default mongoose.model('Session', SessionSchema);

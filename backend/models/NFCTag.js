@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+
 const NFCTagSchema = new mongoose.Schema({
   uid: {
     type:     String,
@@ -11,6 +12,4 @@ const NFCTagSchema = new mongoose.Schema({
   timestamps: { createdAt: true, updatedAt: false },  // schema only specifies createdAt
 });
 
-NFCTagSchema.index({ uid: 1 }, { unique: true });
-
-module.exports = mongoose.model('NFCTag', NFCTagSchema);
+export default mongoose.model('NFCTag', NFCTagSchema);

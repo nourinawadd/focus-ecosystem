@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const bcrypt   = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt   from 'bcryptjs'; 
 
 const SettingsSchema = new mongoose.Schema({
   defaultSessionType: {
@@ -29,7 +29,7 @@ const UserSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 });
-UserSchema.index({ email: 1 }, { unique: true });
+
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('passwordHash')) return next();
   this.passwordHash = await bcrypt.hash(this.passwordHash, 12);
@@ -46,4 +46,4 @@ UserSchema.methods.toJSON = function () {
   return obj;
 };
 
-module.exports = mongoose.model('User', UserSchema);
+export default mongoose.model('User', UserSchema);

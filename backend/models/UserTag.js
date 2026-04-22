@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+
 const UserTagSchema = new mongoose.Schema({
   userId: {
     type:     mongoose.Schema.Types.ObjectId,
@@ -16,4 +17,4 @@ const UserTagSchema = new mongoose.Schema({
 });
 UserTagSchema.index({ userId: 1, tagId: 1 }, { unique: true });
 
-module.exports = mongoose.model('UserTag', UserTagSchema);
+export default mongoose.model('UserTag', UserTagSchema);

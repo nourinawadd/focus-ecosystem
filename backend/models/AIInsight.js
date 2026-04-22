@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const AIInsightSchema = new mongoose.Schema({
   userId: {
@@ -34,4 +34,4 @@ const AIInsightSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-module.exports = mongoose.model('AIInsight', AIInsightSchema);
+export default mongoose.model('AIInsight', AIInsightSchema);

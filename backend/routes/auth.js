@@ -1,8 +1,8 @@
 import express from 'express';
-import jwt  from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-const router  = express.Router();
+const router = express.Router();
 
 const sign = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, {

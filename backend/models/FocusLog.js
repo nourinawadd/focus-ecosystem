@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 const EVENTS = [
   'SESSION_STARTED',
   'SESSION_ENDED',
@@ -39,4 +39,4 @@ const FocusLogSchema = new mongoose.Schema({
 FocusLogSchema.index({ sessionId: 1, timestamp: 1 });
 FocusLogSchema.index({ userId: 1, event: 1, timestamp: -1 });
 
-module.exports = mongoose.model('FocusLog', FocusLogSchema);
+export default mongoose.model('FocusLog', FocusLogSchema);
