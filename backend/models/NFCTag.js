@@ -1,7 +1,16 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
+const NFCTagSchema = new mongoose.Schema({
+  uid: {
+    type:     String,
+    required: true,
+    unique:   true,   // a physical tag can only exist once globally
+    uppercase: true,
+    trim:      true,
+  },
+}, {
+  timestamps: { createdAt: true, updatedAt: false },  // schema only specifies createdAt
+});
 
-const nfctagSchema = new mongoose.Schema({
-  uid: { type: String, required: true, unique: true }
-}, { timestamps: true });
+NFCTagSchema.index({ uid: 1 }, { unique: true });
 
-export default mongoose.model("NFCTag", nfctagSchema);
+module.exports = mongoose.model('NFCTag', NFCTagSchema);

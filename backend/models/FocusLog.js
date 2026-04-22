@@ -1,31 +1,42 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
+const EVENTS = [
+  'SESSION_STARTED',
+  'SESSION_ENDED',
+  'APP_BLOCKED',      
+  'BREAK_STARTED',
+  'BREAK_ENDED',
+  'NFC_VERIFIED',    
+  'NFC_REJECTED',   
+];
 
-const focusLogSchema = new mongoose.Schema({
-  sessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-
-  event: {
-    type: String,
-    enum: [
-      "SESSION_STARTED",
-      "SESSION_ENDED",
-      "APP_BLOCKED",
-      "BREAK_STARTED",
-      "BREAK_ENDED",
-      "NFC_VERIFIED",
-      "NFC_REJECTED"
-    ]
+const FocusLogSchema = new mongoose.Schema({
+  sessionId: {
+    type:     mongoose.Schema.Types.ObjectId,
+    ref:      'Session',
+    required: true,
+    index:    true,
   },
-
+  userId: {
+    type:     mongoose.Schema.Types.ObjectId,
+    ref:      'User',
+    required: true,
+    index:    true,
+  },
+  event: {
+    type:     String,
+    enum:     EVENTS,
+    required: true,
+  },
   timestamp: { type: Date, default: Date.now },
-
   metadata: {
-    appName: String,
-    packageName: String,
-    reason: String
-  }
+    appName:     { type: String, default: null },
+    packageName: { type: String, default: null },
+    reason:      { type: String, default: null },
+  },
+}, {
 });
 
-focusLogSchema.index({ userId: 1, timestamp: -1 });
+FocusLogSchema.index({ sessionId: 1, timestamp: 1 });
+FocusLogSchema.index({ userId: 1, event: 1, timestamp: -1 });
 
-export default mongoose.model("FocusLog", focusLogSchema);
+module.exports = mongoose.model('FocusLog', FocusLogSchema);
