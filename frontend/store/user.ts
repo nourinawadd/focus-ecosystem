@@ -5,6 +5,7 @@
 export type UserProfile = {
   name: string;
   email: string;
+  createdAt?: string;          // ISO date string from server
 
   // ── Goals (drive progress bars on Dashboard & health score in Analytics) ──
   dailyGoalMinutes: number;    // target focus minutes per day  (default 120 = 2 h)

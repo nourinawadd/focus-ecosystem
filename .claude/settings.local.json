@@ -5,7 +5,8 @@
       "Bash(Select-Object Name)",
       "Bash(npx expo *)",
       "Bash(node *)",
-      "Bash(curl -fsS http://localhost:5000/api/health -o /dev/null)"
+      "Bash(curl -fsS http://localhost:5000/api/health -o /dev/null)",
+      "Bash(npx tsc *)"
     ]
   }
 }

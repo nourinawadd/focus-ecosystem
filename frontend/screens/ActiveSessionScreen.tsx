@@ -4,8 +4,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NavProps, SessionRecord } from '../App';
-import { toDateStr, fmtHHMM, computeStreak } from '../store/sessions';
+import { NavProps } from '../App';
+import { toDateStr, fmtHHMM } from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
 import Card from '../components/Card';
 import PillBadge from '../components/PillBadge';
@@ -24,22 +24,25 @@ function arcColor(p: number) {
 }
 
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
-  const totalSecs   = parseInt(nav.params.duration ?? '45') * 60;
+  const totalSecs   = parseInt(nav.params.duration      ?? '45') * 60;
   const isPomo      = nav.params.pomodoro === 'true';
+  const pomoWork    = parseInt(nav.params.pomodoroWork  ?? '25');
+  const pomoBreak   = parseInt(nav.params.pomodoroBreak ?? '5');
   const sessionType = nav.params.type ?? 'Study';
   const blockedApps = (nav.params.blockedApps ?? '').split(',').filter(Boolean);
 
-  const FOCUS_SECS = isPomo ? 25 * 60 : totalSecs;
-  const BREAK_SECS = 5 * 60;
-  const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (25 * 60)), 1) : 1;
+  const FOCUS_SECS = isPomo ? pomoWork  * 60 : totalSecs;
+  const BREAK_SECS = isPomo ? pomoBreak * 60 : 0;
+  const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (pomoWork * 60)), 1) : 1;
 
   const [phase,     setPhase]     = useState<'focus' | 'break'>('focus');
   const [round,     setRound]     = useState(1);
   const [remaining, setRemaining] = useState(FOCUS_SECS);
   const [running,   setRunning]   = useState(true);
 
-  const startedAt    = useRef(new Date());
-  const sessionIdRef = useRef<string | null>(null);
+  const startedAt      = useRef(new Date());
+  const sessionIdRef   = useRef<string | null>(null);
+  const focusSecsRef   = useRef(0);   // counts only focus-phase seconds (not break time)
 
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
@@ -55,7 +58,11 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       body: JSON.stringify({
         type:        sessionType.toUpperCase(),
         timerMode:   isPomo ? 'POMODORO' : 'COUNTDOWN',
-        timerConfig: { plannedDuration: parseInt(nav.params.duration ?? '45') },
+        timerConfig: {
+          plannedDuration: parseInt(nav.params.duration ?? '45'),
+          pomodoroWork:    pomoWork,
+          pomodoroBreak:   pomoBreak,
+        },
         blockedApps,
         dateStr:     toDateStr(now),
         startedAt:   now.toISOString(),
@@ -76,6 +83,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
+      if (phaseRef.current === 'focus') focusSecsRef.current += 1;
       setRemaining(prev => {
         if (prev <= 1) { clearInterval(id); return 0; }
         pulseTick();
@@ -113,8 +121,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         {
           text:  isComplete ? 'View Summary' : 'End Session',
           style: isComplete ? 'default'      : 'destructive',
-          onPress: () => {
-            const elapsed         = totalSecs - remaining;
+          onPress: async () => {
+            const elapsed         = focusSecsRef.current;
             const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
             const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));
             const distractionsVal = Math.max(
@@ -129,41 +137,36 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             );
 
             const endedAt = new Date();
-            const record: SessionRecord = {
-              id:         sessionIdRef.current ?? String(Date.now()),
-              title:      `${sessionType} Session`,
-              type:       sessionType,
-              duration:   actualMinutes,
-              startTime:  fmtHHMM(startedAt.current),
-              endTime:    fmtHHMM(endedAt),
-              focusScore: score,
-              completed:  true,
-              dateStr:    toDateStr(endedAt),
-            };
 
-            nav.addSession(record);
+            let finalScore = score;
+            let streak     = '0';
 
-            // Persist the completed session to the backend.
             if (nav.token && sessionIdRef.current) {
-              apiFetch(`/sessions/${sessionIdRef.current}/end`, nav.token, {
-                method: 'PATCH',
-                body: JSON.stringify({
-                  status:            'COMPLETED',
-                  timerState:        { actualDuration: actualMinutes },
-                  focusScore:        score,
-                  distractionCount:  distractionsVal,
-                  endedAt:           endedAt.toISOString(),
-                }),
-              }).catch(console.error);
+              try {
+                const res = await apiFetch<{ session: { focusScore: number | null }; streak: number }>(
+                  `/sessions/${sessionIdRef.current}/end`, nav.token, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                      status:           'COMPLETED',
+                      timerState:       { actualDuration: actualMinutes },
+                      focusScore:       score,
+                      distractionCount: distractionsVal,
+                      endedAt:          endedAt.toISOString(),
+                    }),
+                  },
+                );
+                finalScore = res.session.focusScore ?? score;
+                streak     = String(res.streak);
+                nav.refreshSessions();
+              } catch {
+                // Network failure — continue with local values
+              }
             }
-
-            const updatedSessions = [record, ...nav.sessions];
-            const streak          = String(computeStreak(updatedSessions));
 
             nav.navigate('SessionComplete', {
               ...nav.params,
               actualMinutes: String(actualMinutes),
-              focusScore:    String(score),
+              focusScore:    String(finalScore),
               blockedCount:  String(blockedApps.length),
               distractions:  String(distractionsVal),
               streak,

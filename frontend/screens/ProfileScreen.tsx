@@ -1,11 +1,19 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { NavProps } from '../App';
+import { computeFocusHours, computeLongestStreak } from '../store/sessions';
 
 export default function ProfileScreen({ nav }: { nav: NavProps }) {
-  const name = nav.params.name ?? 'User';
-  const email = nav.params.email ?? '';
-  const initial = name.charAt(0).toUpperCase();
+  const { user, sessions } = nav;
+  const initial = user.name.charAt(0).toUpperCase();
+
+  const totalSessions  = sessions.length;
+  const focusHours     = computeFocusHours(sessions);
+  const longestStreak  = computeLongestStreak(sessions);
+
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : '—';
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
@@ -26,8 +34,8 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initial}</Text>
         </View>
-        <Text style={styles.name}>{name}</Text>
-        {email ? <Text style={styles.email}>{email}</Text> : null}
+        <Text style={styles.name}>{user.name}</Text>
+        {user.email ? <Text style={styles.email}>{user.email}</Text> : null}
       </View>
 
       {/* Info Cards */}
@@ -36,17 +44,17 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
       <View style={styles.card}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Full Name</Text>
-          <Text style={styles.infoValue}>{name}</Text>
+          <Text style={styles.infoValue}>{user.name}</Text>
         </View>
         <View style={styles.rowDivider} />
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Email</Text>
-          <Text style={styles.infoValue}>{email || '—'}</Text>
+          <Text style={styles.infoValue}>{user.email || '—'}</Text>
         </View>
         <View style={styles.rowDivider} />
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Member Since</Text>
-          <Text style={styles.infoValue}>April 2025</Text>
+          <Text style={styles.infoValue}>{memberSince}</Text>
         </View>
       </View>
 
@@ -55,21 +63,21 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
 
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>24</Text>
+          <Text style={styles.statValue}>{totalSessions}</Text>
           <Text style={styles.statLabel}>Sessions</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>48h</Text>
+          <Text style={styles.statValue}>{focusHours}h</Text>
           <Text style={styles.statLabel}>Total Focus</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>12d</Text>
+          <Text style={styles.statValue}>{longestStreak}d</Text>
           <Text style={styles.statLabel}>Best Streak</Text>
         </View>
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => nav.replace('Login')}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={nav.signOut}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
 
