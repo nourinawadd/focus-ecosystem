@@ -1,12 +1,14 @@
+// frontend/screens/SettingsScreen.tsx
+// User preferences. Every change is immediately synced to PATCH /user/settings.
 import React from 'react';
 import { View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
-import { NavProps } from '../App';
+import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
+import { apiFetch } from '../api/client';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 
-// ─── Reusable chip row ────────────────────────────────────────────────────────
 function ChipRow<T extends string | number>({
   options, active, onSelect, labelOf,
 }: {
@@ -36,7 +38,6 @@ function ChipRow<T extends string | number>({
   );
 }
 
-// ─── Toggle row ───────────────────────────────────────────────────────────────
 function ToggleRow({ label, desc, value, onChange }: {
   label: string; desc: string; value: boolean; onChange: (v: boolean) => void;
 }) {
@@ -52,15 +53,35 @@ function ToggleRow({ label, desc, value, onChange }: {
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function SettingsScreen({ nav }: { nav: NavProps }) {
-  const { user, updateUser } = nav;
+  const { user, token } = nav;
   const initial = user.name.charAt(0).toUpperCase();
+
+  // Updates local state instantly and fires a background sync to the backend.
+  const updateAndSync = async (updates: Partial<UserProfile>) => {
+    nav.updateUser(updates);
+    if (!token) return;
+
+    const backendUpdates: Record<string, unknown> = {};
+    if (updates.dailyGoalMinutes    !== undefined) backendUpdates.dailyGoalMinutes    = updates.dailyGoalMinutes;
+    if (updates.weeklyGoalMinutes   !== undefined) backendUpdates.weeklyGoalMinutes   = updates.weeklyGoalMinutes;
+    if (updates.preferredDuration   !== undefined) backendUpdates.defaultDuration     = updates.preferredDuration;
+    if (updates.pomodoroEnabled     !== undefined) backendUpdates.defaultTimerMode    = updates.pomodoroEnabled ? 'POMODORO' : 'COUNTDOWN';
+    if (updates.notificationsEnabled !== undefined) backendUpdates.notificationsEnabled = updates.notificationsEnabled;
+
+    try {
+      await apiFetch('/user/settings', token, {
+        method: 'PATCH',
+        body: JSON.stringify(backendUpdates),
+      });
+    } catch {
+      // Local state is already updated; silently ignore transient network failures.
+    }
+  };
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
 
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer}>
           <View style={s.menuLine} /><View style={s.menuLine} /><View style={s.menuLine} />
@@ -69,7 +90,6 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         <View style={s.menuBtn} />
       </View>
 
-      {/* ── Profile ──────────────────────────────────────────────────────────── */}
       <Text style={s.sectionLabel}>PROFILE</Text>
       <View style={s.card}>
         <View style={s.profileRow}>
@@ -81,7 +101,6 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         </View>
       </View>
 
-      {/* ── Focus Goals ───────────────────────────────────────────────────────── */}
       <Text style={s.sectionLabel}>FOCUS GOALS</Text>
       <View style={s.selectCard}>
         <Text style={s.rowLabel}>Daily Goal</Text>
@@ -89,7 +108,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         <ChipRow
           options={DAILY_GOAL_OPTIONS.map(o => o.minutes)}
           active={user.dailyGoalMinutes}
-          onSelect={v => updateUser({ dailyGoalMinutes: v })}
+          onSelect={v => updateAndSync({ dailyGoalMinutes: v })}
           labelOf={v => DAILY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
         />
       </View>
@@ -99,12 +118,11 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         <ChipRow
           options={WEEKLY_GOAL_OPTIONS.map(o => o.minutes)}
           active={user.weeklyGoalMinutes}
-          onSelect={v => updateUser({ weeklyGoalMinutes: v })}
+          onSelect={v => updateAndSync({ weeklyGoalMinutes: v })}
           labelOf={v => WEEKLY_GOAL_OPTIONS.find(o => o.minutes === v)?.label ?? `${v}m`}
         />
       </View>
 
-      {/* ── Session Defaults ──────────────────────────────────────────────────── */}
       <Text style={s.sectionLabel}>SESSION DEFAULTS</Text>
       <View style={s.selectCard}>
         <Text style={s.rowLabel}>Preferred Duration</Text>
@@ -112,7 +130,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         <ChipRow
           options={DURATION_OPTIONS}
           active={user.preferredDuration}
-          onSelect={v => updateUser({ preferredDuration: v })}
+          onSelect={v => updateAndSync({ preferredDuration: v })}
           labelOf={v => `${v} min`}
         />
       </View>
@@ -121,18 +139,17 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           label="Pomodoro Mode"
           desc="Enable 25 min focus / 5 min break by default"
           value={user.pomodoroEnabled}
-          onChange={v => updateUser({ pomodoroEnabled: v })}
+          onChange={v => updateAndSync({ pomodoroEnabled: v })}
         />
       </View>
 
-      {/* ── Preferences ───────────────────────────────────────────────────────── */}
       <Text style={s.sectionLabel}>PREFERENCES</Text>
       <View style={s.card}>
         <ToggleRow
           label="Notifications"
           desc="Session reminders and completion alerts"
           value={user.notificationsEnabled}
-          onChange={v => updateUser({ notificationsEnabled: v })}
+          onChange={v => updateAndSync({ notificationsEnabled: v })}
         />
       </View>
 
@@ -141,36 +158,29 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  screen:    { flex: 1, backgroundColor: colors.bg },
-  container: { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
-
-  header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
-  menuBtn:   { width: 40, height: 40, justifyContent: 'center' },
-  menuLine:  { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
-  title:     { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
-
+  screen:       { flex: 1, backgroundColor: colors.bg },
+  container:    { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
+  menuBtn:      { width: 40, height: 40, justifyContent: 'center' },
+  menuLine:     { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
+  title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
-
-  card:       { backgroundColor: colors.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  selectCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.md, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-
-  profileRow:  { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
-  avatar:      { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarTxt:   { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
-  profileInfo: { flex: 1 },
-  profileName: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 2 },
-  profileEmail:{ fontSize: fontSize.sm, color: colors.muted },
-
-  toggleRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
-  rowInfo:   { flex: 1, marginRight: spacing.md },
-  rowLabel:  { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginBottom: 2 },
-  rowDesc:   { fontSize: fontSize.xs + 1, color: colors.muted },
-
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  chip:     { paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm, borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border },
-  chipOn:   { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipTxt:  { fontSize: fontSize.sm, color: colors.muted, fontWeight: '500' },
-  chipTxtOn:{ color: colors.white, fontWeight: '600' },
+  card:         { backgroundColor: colors.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  selectCard:   { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.md, shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  profileRow:   { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
+  avatar:       { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarTxt:    { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
+  profileInfo:  { flex: 1 },
+  profileName:  { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 2 },
+  profileEmail: { fontSize: fontSize.sm, color: colors.muted },
+  toggleRow:    { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
+  rowInfo:      { flex: 1, marginRight: spacing.md },
+  rowLabel:     { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginBottom: 2 },
+  rowDesc:      { fontSize: fontSize.xs + 1, color: colors.muted },
+  chipsRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  chip:         { paddingHorizontal: spacing.md + 2, paddingVertical: spacing.sm, borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border },
+  chipOn:       { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipTxt:      { fontSize: fontSize.sm, color: colors.muted, fontWeight: '500' },
+  chipTxtOn:    { color: colors.white, fontWeight: '600' },
 });

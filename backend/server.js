@@ -13,6 +13,7 @@ import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
+import errorHandler    from './middleware/errorHandler.js';
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +27,8 @@ app.use('/api/sessions',  sessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
+
+app.use(errorHandler);
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
