@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\UNIVERSITY\\\\Graduation Project\\\\focus-ecosystem\\\\frontend\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(npx expo *)",
+      "Bash(node *)",
+      "Bash(curl -fsS http://localhost:5000/api/health -o /dev/null)"
+    ]
+  }
+}

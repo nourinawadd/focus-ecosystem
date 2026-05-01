@@ -1,15 +1,15 @@
-// Verifies the JWT on every protected route and attaches req.user.
-import jwt  from 'jsonwebtoken';
+// JWT verification middleware. Attaches req.user to every protected request.
 import User from '../models/User.js';
+import { verify } from '../utils/jwt.js';
 
 export default async function auth(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer '))
     return res.status(401).json({ message: 'No token provided' });
 
-  const token = header.split(' ')[1];
+  const token = header.slice('Bearer '.length).trim();
   try {
-    const { id } = jwt.verify(token, process.env.JWT_SECRET);
+    const { id } = verify(token);
     req.user = await User.findById(id).select('-passwordHash');
     if (!req.user) return res.status(401).json({ message: 'User not found' });
     next();
