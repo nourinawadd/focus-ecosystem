@@ -31,17 +31,19 @@ export type ScreenName =
 
 export type NavParams = Record<string, string>;
 export type NavProps = {
-  navigate:      (screen: ScreenName, params?: NavParams) => void;
-  replace:       (screen: ScreenName, params?: NavParams) => void;
-  params:        NavParams;
-  openDrawer:    () => void;
-  sessions:      SessionRecord[];
-  addSession:    (s: SessionRecord) => void;
-  deleteSession: (id: string) => void;
-  user:          UserProfile;
-  updateUser:    (updates: Partial<UserProfile>) => void;
-  token:         string | null;
-  setToken:      (t: string) => void;
+  navigate:         (screen: ScreenName, params?: NavParams) => void;
+  replace:          (screen: ScreenName, params?: NavParams) => void;
+  params:           NavParams;
+  openDrawer:       () => void;
+  sessions:         SessionRecord[];
+  addSession:       (s: SessionRecord) => void;
+  deleteSession:    (id: string) => void;
+  refreshSessions:  () => void;
+  user:             UserProfile;
+  updateUser:       (updates: Partial<UserProfile>) => void;
+  token:            string | null;
+  setToken:         (t: string) => void;
+  signOut:          () => void;
 };
 
 export type { SessionRecord, UserProfile };
@@ -111,6 +113,13 @@ export default function App() {
     navigate('Login');
   }, [navigate]);
 
+  const refreshSessions = useCallback(() => {
+    if (!token) return;
+    apiFetch<SessionRecord[]>('/sessions', token)
+      .then(setSessions)
+      .catch((e: any) => { if (e?.status === 401) signOut(); });
+  }, [token, signOut]);
+
   // Re-fetch sessions and user profile from the API whenever the token changes.
   // On 401 (expired/invalid token), clear stored auth and bounce to Login.
   useEffect(() => {
@@ -126,10 +135,11 @@ export default function App() {
         else setSessions([]);
       });
 
-    apiFetch<{ name: string; email: string; settings: Record<string, any> }>('/user/me', token)
+    apiFetch<{ name: string; email: string; createdAt?: string; settings: Record<string, any> }>('/user/me', token)
       .then(me => updateUser({
         name:                 me.name,
         email:                me.email,
+        createdAt:            me.createdAt,
         dailyGoalMinutes:     me.settings?.dailyGoalMinutes     ?? 120,
         weeklyGoalMinutes:    me.settings?.weeklyGoalMinutes     ?? 600,
         preferredDuration:    me.settings?.defaultDuration       ?? 25,
@@ -144,16 +154,18 @@ export default function App() {
 
   const nav: NavProps = {
     navigate,
-    replace:       navigate,
+    replace:          navigate,
     params,
-    openDrawer:    () => setDrawerOpen(true),
+    openDrawer:       () => setDrawerOpen(true),
     sessions,
     addSession,
     deleteSession,
+    refreshSessions,
     user,
     updateUser,
     token,
     setToken,
+    signOut,
   };
 
   if (!hydrated) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;

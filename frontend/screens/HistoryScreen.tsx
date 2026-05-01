@@ -6,6 +6,7 @@ import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { toDateStr, daysAgo, computeStreak, computeFocusHours } from '../store/sessions';
+import { apiFetch } from '../api/client';
 
 // ─── Filter type ──────────────────────────────────────────────────────────────
 type HistoryFilter = 'Today' | 'Week' | 'Month';
@@ -203,7 +204,11 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
                   <SessionItem
                     key={s.id}
                     s={s}
-                    onDelete={() => nav.deleteSession(s.id)}
+                    onDelete={() => {
+                      nav.deleteSession(s.id);
+                      apiFetch(`/sessions/${s.id}`, nav.token, { method: 'DELETE' })
+                        .catch(() => nav.addSession(s));
+                    }}
                   />
                 ))}
               </View>
