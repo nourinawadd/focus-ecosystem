@@ -47,8 +47,8 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
 
   if (!visible) return null;
 
-  const name = nav.params.name ?? 'User';
-  const email = nav.params.email ?? '';
+  const name = nav.user.name;
+  const email = nav.user.email;
   const initial = name.charAt(0).toUpperCase();
 
   return (

@@ -15,6 +15,7 @@ const BG_VIDEO = require('../assets/13058496_1080_1920_60fps.mp4');
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
 // Determine best productive time from all sessions (same logic as Analytics)
+// TODO: replace with ai logic
 function bestTimeLabel(sessions: SessionRecord[]): string | null {
   const done = sessions.filter(s => s.completed && s.startTime);
   if (done.length === 0) return null;
@@ -46,7 +47,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const focusDay = `FOCUS ${DAYS[new Date().getDay()]}`;
 
   // ── Live stats from shared session store ────────────────────────────────────
-  const SCORE         = computeTodayScore(sessions) || 78;
+  const SCORE         = computeTodayScore(sessions);
   const totalSessions = sessions.length;
   const focusHours    = computeFocusHours(sessions);
   const streak        = computeStreak(sessions);

@@ -1,3 +1,5 @@
+// frontend/screens/LoginScreen.tsx
+// Login screen. Calls POST /auth/login, sets the global token on success.
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
@@ -5,31 +7,41 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
+import { apiFetch } from '../api/client';
 
-type Errors = { email?: string; password?: string };
+type Errors = { email?: string; password?: string; api?: string };
 
 export default function LoginScreen({ nav }: { nav: NavProps }) {
-  const [email, setEmail] = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<Errors>({});
+  const [errors,   setErrors]   = useState<Errors>({});
+  const [loading,  setLoading]  = useState(false);
 
   const validate = (): boolean => {
     const e: Errors = {};
-    if (!email) e.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email address';
-    if (!password) e.password = 'Password is required';
-    else if (password.length < 6) e.password = 'Must be at least 6 characters';
+    if (!email)                            e.email    = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email    = 'Enter a valid email address';
+    if (!password)                         e.password = 'Password is required';
+    else if (password.length < 8)         e.password = 'Must be at least 8 characters';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleLogin = () => {
-    if (validate()) {
-      const name = email.split('@')[0];
-      const formatted = name.charAt(0).toUpperCase() + name.slice(1);
-      // Sync name + email into the centralised UserProfile before navigating
-      nav.updateUser({ name: formatted, email });
-      nav.replace('Dashboard', { name: formatted, email });
+  const handleLogin = async () => {
+    if (!validate() || loading) return;
+    setLoading(true);
+    try {
+      const { token, user } = await apiFetch<{ token: string; user: any }>(
+        '/auth/login', null,
+        { method: 'POST', body: JSON.stringify({ email, password }) },
+      );
+      nav.setToken(token);
+      nav.updateUser({ name: user.name, email: user.email });
+      nav.replace('Dashboard', { name: user.name, email: user.email });
+    } catch (e: any) {
+      setErrors({ api: e.message ?? 'Login failed. Check your credentials.' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,6 +56,8 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
 
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Sign in to continue your focus journey</Text>
+
+        {errors.api && <Text style={styles.apiError}>{errors.api}</Text>}
 
         <Text style={styles.label}>EMAIL</Text>
         <TextInput
@@ -67,8 +81,12 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
           <Text style={styles.forgotText}>Forgot password?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Sign In</Text>
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
 
         <View style={styles.divider}>
@@ -104,28 +122,30 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#fff' },
-  container: { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#111', marginRight: 8 },
-  logoText: { fontSize: 18, fontWeight: '700', color: '#111' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#111', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#888', marginBottom: 32 },
-  label: { fontSize: 11, fontWeight: '600', color: '#888', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
-  input: { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 14, fontSize: 15, color: '#111', marginBottom: 4 },
-  inputError: { borderColor: '#e53935' },
-  error: { color: '#e53935', fontSize: 12, marginBottom: 6 },
-  forgotRow: { alignItems: 'flex-end', marginBottom: 8 },
-  forgotText: { fontSize: 13, color: '#555', fontWeight: '500' },
-  button: { backgroundColor: '#111', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 24 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
-  dividerText: { fontSize: 11, color: '#aaa', marginHorizontal: 10, letterSpacing: 0.5 },
-  socialRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-  socialBtn: { flex: 1, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  socialContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  socialText: { fontSize: 14, fontWeight: '500', color: '#111' },
-  link: { textAlign: 'center', fontSize: 14, color: '#888' },
-  linkBold: { fontWeight: '600', color: '#111' },
+  flex:           { flex: 1, backgroundColor: '#fff' },
+  container:      { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
+  logoRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
+  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#111', marginRight: 8 },
+  logoText:       { fontSize: 18, fontWeight: '700', color: '#111' },
+  title:          { fontSize: 28, fontWeight: 'bold', color: '#111', marginBottom: 6 },
+  subtitle:       { fontSize: 14, color: '#888', marginBottom: 32 },
+  apiError:       { color: '#e53935', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#fdecea', borderRadius: 8 },
+  label:          { fontSize: 11, fontWeight: '600', color: '#888', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
+  input:          { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 14, fontSize: 15, color: '#111', marginBottom: 4 },
+  inputError:     { borderColor: '#e53935' },
+  error:          { color: '#e53935', fontSize: 12, marginBottom: 6 },
+  forgotRow:      { alignItems: 'flex-end', marginBottom: 8 },
+  forgotText:     { fontSize: 13, color: '#555', fontWeight: '500' },
+  button:         { backgroundColor: '#111', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 24 },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText:     { color: '#fff', fontSize: 16, fontWeight: '600' },
+  divider:        { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  dividerLine:    { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
+  dividerText:    { fontSize: 11, color: '#aaa', marginHorizontal: 10, letterSpacing: 0.5 },
+  socialRow:      { flexDirection: 'row', gap: 12, marginBottom: 32 },
+  socialBtn:      { flex: 1, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  socialContent:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  socialText:     { fontSize: 14, fontWeight: '500', color: '#111' },
+  link:           { textAlign: 'center', fontSize: 14, color: '#888' },
+  linkBold:       { fontWeight: '600', color: '#111' },
 });

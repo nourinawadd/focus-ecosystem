@@ -52,6 +52,21 @@ export function computeStreak(sessions: SessionRecord[]): number {
   return streak;
 }
 
+/** Longest ever consecutive-day streak across all completed sessions */
+export function computeLongestStreak(sessions: SessionRecord[]): number {
+  const sorted = [...new Set(sessions.filter(s => s.completed).map(s => s.dateStr))].sort();
+  let max = 0, cur = 0, prev: string | null = null;
+  for (const ds of sorted) {
+    const diff = prev
+      ? Math.round((new Date(ds + 'T12:00:00').getTime() - new Date(prev + 'T12:00:00').getTime()) / 86_400_000)
+      : null;
+    cur = diff === 1 ? cur + 1 : 1;
+    if (cur > max) max = cur;
+    prev = ds;
+  }
+  return max;
+}
+
 /** Total focus hours from completed sessions, formatted to 1 decimal */
 export function computeFocusHours(sessions: SessionRecord[]): string {
   const mins = sessions

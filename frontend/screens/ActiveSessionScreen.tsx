@@ -1,14 +1,17 @@
+// frontend/screens/ActiveSessionScreen.tsx
+// Runs the focus timer. Creates a session record in the DB on mount via POST /sessions,
+// then closes it with PATCH /sessions/:id/end when the user ends or completes the session.
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NavProps, SessionRecord } from '../App';
-import { toDateStr, fmtHHMM, computeStreak } from '../store/sessions';
+import { NavProps } from '../App';
+import { toDateStr, fmtHHMM } from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
 import Card from '../components/Card';
 import PillBadge from '../components/PillBadge';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
+import { apiFetch } from '../api/client';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
   const s = (secs % 60).toString().padStart(2, '0');
@@ -20,32 +23,56 @@ function arcColor(p: number) {
   return colors.danger;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
-  const totalSecs   = parseInt(nav.params.duration ?? '45') * 60;
+  const totalSecs   = parseInt(nav.params.duration      ?? '45') * 60;
   const isPomo      = nav.params.pomodoro === 'true';
+  const pomoWork    = parseInt(nav.params.pomodoroWork  ?? '25');
+  const pomoBreak   = parseInt(nav.params.pomodoroBreak ?? '5');
   const sessionType = nav.params.type ?? 'Study';
   const blockedApps = (nav.params.blockedApps ?? '').split(',').filter(Boolean);
 
-  const FOCUS_SECS = isPomo ? 25 * 60 : totalSecs;
-  const BREAK_SECS = 5 * 60;
-  const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (25 * 60)), 1) : 1;
+  const FOCUS_SECS = isPomo ? pomoWork  * 60 : totalSecs;
+  const BREAK_SECS = isPomo ? pomoBreak * 60 : 0;
+  const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (pomoWork * 60)), 1) : 1;
 
   const [phase,     setPhase]     = useState<'focus' | 'break'>('focus');
   const [round,     setRound]     = useState(1);
   const [remaining, setRemaining] = useState(FOCUS_SECS);
   const [running,   setRunning]   = useState(true);
 
-  // Record the wall-clock time the session started (for HH:MM display)
-  const startedAt = useRef(new Date());
+  const startedAt      = useRef(new Date());
+  const sessionIdRef   = useRef<string | null>(null);
+  const focusSecsRef   = useRef(0);   // counts only focus-phase seconds (not break time)
 
-  // Refs so interval always reads current phase/round without re-creating
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roundRef.current = round; }, [round]);
 
-  // Per-second tick pulse on timer digits
+  // Create the session in the DB as soon as the screen mounts.
+  useEffect(() => {
+    if (!nav.token) return;
+    const now = startedAt.current;
+    apiFetch<{ id: string }>('/sessions', nav.token, {
+      method: 'POST',
+      body: JSON.stringify({
+        type:        sessionType.toUpperCase(),
+        timerMode:   isPomo ? 'POMODORO' : 'COUNTDOWN',
+        timerConfig: {
+          plannedDuration: parseInt(nav.params.duration ?? '45'),
+          pomodoroWork:    pomoWork,
+          pomodoroBreak:   pomoBreak,
+        },
+        blockedApps,
+        dateStr:     toDateStr(now),
+        startedAt:   now.toISOString(),
+      }),
+    })
+      .then(data => { sessionIdRef.current = data.id; })
+      .catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const tickAnim = useRef(new Animated.Value(1)).current;
   const pulseTick = () =>
     Animated.sequence([
@@ -53,10 +80,10 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       Animated.timing(tickAnim, { toValue: 1,     duration: 180, useNativeDriver: true }),
     ]).start();
 
-  // ── Countdown ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
+      if (phaseRef.current === 'focus') focusSecsRef.current += 1;
       setRemaining(prev => {
         if (prev <= 1) { clearInterval(id); return 0; }
         pulseTick();
@@ -66,7 +93,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     return () => clearInterval(id);
   }, [running, phase]);
 
-  // ── Auto phase-switch when phase hits 0 ──────────────────────────────────────
   useEffect(() => {
     if (remaining !== 0) return;
     if (!isPomo) { setRunning(false); return; }
@@ -85,7 +111,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     return () => clearTimeout(t);
   }, [remaining]);
 
-  // ── End confirmation — builds a real SessionRecord and persists it ─────────────
   const confirmEnd = () => {
     const isComplete = remaining === 0;
     Alert.alert(
@@ -96,9 +121,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         {
           text:  isComplete ? 'View Summary' : 'End Session',
           style: isComplete ? 'default'      : 'destructive',
-          onPress: () => {
-            // ── 1. Compute stats ─────────────────────────────────────────────
-            const elapsed         = totalSecs - remaining;
+          onPress: async () => {
+            const elapsed         = focusSecsRef.current;
             const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
             const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));
             const distractionsVal = Math.max(
@@ -112,32 +136,37 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
               Math.max(20, Math.round(completionRatio * 80) + pomoBon - penalty + 12),
             );
 
-            // ── 2. Build SessionRecord ───────────────────────────────────────
             const endedAt = new Date();
-            const record: SessionRecord = {
-              id:         String(Date.now()),
-              title:      `${sessionType} Session`,
-              type:       sessionType,
-              duration:   actualMinutes,
-              startTime:  fmtHHMM(startedAt.current),
-              endTime:    fmtHHMM(endedAt),
-              focusScore: score,
-              completed:  true,
-              dateStr:    toDateStr(endedAt),
-            };
 
-            // ── 3. Persist to global store (HistoryScreen + Dashboard react) ─
-            nav.addSession(record);
+            let finalScore = score;
+            let streak     = '0';
 
-            // ── 4. Compute streak from merged list (includes new record) ─────
-            const updatedSessions = [record, ...nav.sessions];
-            const streak          = String(computeStreak(updatedSessions));
+            if (nav.token && sessionIdRef.current) {
+              try {
+                const res = await apiFetch<{ session: { focusScore: number | null }; streak: number }>(
+                  `/sessions/${sessionIdRef.current}/end`, nav.token, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                      status:           'COMPLETED',
+                      timerState:       { actualDuration: actualMinutes },
+                      focusScore:       score,
+                      distractionCount: distractionsVal,
+                      endedAt:          endedAt.toISOString(),
+                    }),
+                  },
+                );
+                finalScore = res.session.focusScore ?? score;
+                streak     = String(res.streak);
+                nav.refreshSessions();
+              } catch {
+                // Network failure — continue with local values
+              }
+            }
 
-            // ── 5. Navigate with summary params ─────────────────────────────
             nav.navigate('SessionComplete', {
               ...nav.params,
               actualMinutes: String(actualMinutes),
-              focusScore:    String(score),
+              focusScore:    String(finalScore),
               blockedCount:  String(blockedApps.length),
               distractions:  String(distractionsVal),
               streak,
@@ -149,9 +178,8 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     );
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────────
   const phaseDuration = phase === 'focus' ? FOCUS_SECS : BREAK_SECS;
-  const progress      = remaining / phaseDuration;       // 1 → 0
+  const progress      = remaining / phaseDuration;
   const ringColor     = arcColor(progress);
   const statusLabel   = !running ? 'Paused' : phase === 'break' ? 'Break' : 'Active';
   const statusColor   = !running ? colors.mutedLight : phase === 'break' ? colors.amber : colors.lime;
@@ -159,16 +187,13 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   return (
     <View style={styles.screen}>
 
-      {/* Status badges */}
       <View style={styles.topBar}>
         <PillBadge label="FOCUS MODE" bg={colors.darkCard} color={colors.white} caps />
         <PillBadge label={statusLabel} bg={colors.darkCard} color={statusColor} dot dotColor={statusColor} />
       </View>
 
-      {/* Session title */}
       <Text style={styles.sessionName}>{sessionType} Session</Text>
 
-      {/* Pomodoro round indicator */}
       {isPomo && (
         <View style={styles.pomoRow}>
           {Array.from({ length: maxRounds }).map((_, i) => (
@@ -187,7 +212,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         </View>
       )}
 
-      {/* Arc progress ring with live countdown inside */}
       <CircularProgress progress={progress} size={224} strokeWidth={11} color={ringColor} style={styles.ring}>
         <Animated.Text style={[styles.timerText, { transform: [{ scale: tickAnim }] }]}>
           {fmt(remaining)}
@@ -197,7 +221,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         </Text>
       </CircularProgress>
 
-      {/* Controls */}
       <View style={styles.controlRow}>
         <TouchableOpacity
           style={[styles.ctrlBtn, styles.pauseBtn]}
@@ -222,7 +245,6 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom card: blocked apps + NFC end */}
       <Card dark style={styles.bottomCard} padding={spacing.lg}>
         {blockedApps.length > 0 && (
           <>
@@ -249,49 +271,34 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: {
     flex: 1, backgroundColor: colors.darkBg, alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
   },
-
-  // Top badges
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xxl },
-
-  // Title
-  sessionName: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginBottom: spacing.sm },
-
-  // Pomodoro dots
-  pomoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl },
-  pomoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.darkBorder },
-  pomoDotDone: { backgroundColor: colors.mutedLight },
+  topBar:        { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xxl },
+  sessionName:   { fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginBottom: spacing.sm },
+  pomoRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl },
+  pomoDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.darkBorder },
+  pomoDotDone:   { backgroundColor: colors.mutedLight },
   pomoDotActive: { backgroundColor: colors.lime, width: 10, height: 10, borderRadius: 5 },
-  pomoLabel: { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, marginLeft: spacing.xs },
-
-  // Ring
-  ring: { marginBottom: spacing.xxxl },
-
-  // Timer (inside ring — sized relative to 224px ring)
-  timerText: { fontSize: 50, fontWeight: '700', color: colors.white, letterSpacing: -1 },
-  timerSub:  { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
-
-  // Controls
-  controlRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
-  ctrlBtn: { borderRadius: radii.md, paddingVertical: 13, paddingHorizontal: spacing.xxl },
-  btnContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pauseBtn: { backgroundColor: colors.darkCardAlt },
-  pauseText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  endBtn: { backgroundColor: '#2e1111' },
-  endText: { color: colors.danger, fontSize: fontSize.md, fontWeight: '600' },
-
-  // Bottom card
-  bottomCard: { marginHorizontal: spacing.xl, alignSelf: 'stretch' },
-  cardRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  cardIcon:   { marginRight: 2 },
-  cardTitle:  { fontSize: fontSize.md, fontWeight: '600', color: colors.white },
-  cardSub:    { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
-  divider:    { height: 1, backgroundColor: colors.darkBorder, marginVertical: spacing.md },
-  nfcRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  nfcText:    { fontSize: fontSize.sm, color: colors.muted },
+  pomoLabel:     { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, marginLeft: spacing.xs },
+  ring:          { marginBottom: spacing.xxxl },
+  timerText:     { fontSize: 50, fontWeight: '700', color: colors.white, letterSpacing: -1 },
+  timerSub:      { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
+  controlRow:    { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
+  ctrlBtn:       { borderRadius: radii.md, paddingVertical: 13, paddingHorizontal: spacing.xxl },
+  btnContent:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pauseBtn:      { backgroundColor: colors.darkCardAlt },
+  pauseText:     { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  endBtn:        { backgroundColor: '#2e1111' },
+  endText:       { color: colors.danger, fontSize: fontSize.md, fontWeight: '600' },
+  bottomCard:    { marginHorizontal: spacing.xl, alignSelf: 'stretch' },
+  cardRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  cardIcon:      { marginRight: 2 },
+  cardTitle:     { fontSize: fontSize.md, fontWeight: '600', color: colors.white },
+  cardSub:       { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
+  divider:       { height: 1, backgroundColor: colors.darkBorder, marginVertical: spacing.md },
+  nfcRow:        { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  nfcText:       { fontSize: fontSize.sm, color: colors.muted },
 });
