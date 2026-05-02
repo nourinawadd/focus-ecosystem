@@ -144,3 +144,10 @@ dist
 # End of https://www.toptal.com/developers/gitignore/api/node
 # my notes
 notes.md
+
+# Large video assets (too big for GitHub — keep locally)
+*.mp4
+*.mov
+*.avi
+*.webm
+*.m4v
