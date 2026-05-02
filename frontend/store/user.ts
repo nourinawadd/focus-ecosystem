@@ -29,6 +29,15 @@ export const DEFAULT_USER: UserProfile = {
   notificationsEnabled: true,
 };
 
+// ─── NFC tag types ────────────────────────────────────────────────────────────
+export type UserTag = {
+  _id: string;
+  userId: string;
+  tagId: { _id: string; uid: string; createdAt: string };
+  label: string;
+  registeredAt: string;
+};
+
 // ─── Goal chip definitions (used by SettingsScreen) ───────────────────────────
 export const DAILY_GOAL_OPTIONS: { label: string; minutes: number }[] = [
   { label: '1 h',   minutes: 60  },

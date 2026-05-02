@@ -1,8 +1,8 @@
-// frontend/screens/ActiveSessionScreen.tsx
-// Runs the focus timer. Creates a session record in the DB on mount via POST /sessions,
-// then closes it with PATCH /sessions/:id/end when the user ends or completes the session.
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert, Animated } from 'react-native';
+import {
+  View, Text, TouchableOpacity, StyleSheet, Platform,
+  Alert, Animated, Modal, Easing,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { toDateStr, fmtHHMM } from '../store/sessions';
@@ -11,6 +11,7 @@ import Card from '../components/Card';
 import PillBadge from '../components/PillBadge';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
 
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -22,6 +23,8 @@ function arcColor(p: number) {
   if (p > 0.25) return colors.amber;
   return colors.danger;
 }
+
+type NfcModalPhase = 'scanning' | 'unregistered';
 
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const totalSecs   = parseInt(nav.params.duration      ?? '45') * 60;
@@ -35,24 +38,56 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const BREAK_SECS = isPomo ? pomoBreak * 60 : 0;
   const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (pomoWork * 60)), 1) : 1;
 
-  const [phase,     setPhase]     = useState<'focus' | 'break'>('focus');
-  const [round,     setRound]     = useState(1);
-  const [remaining, setRemaining] = useState(FOCUS_SECS);
-  const [running,   setRunning]   = useState(true);
+  const [phase,        setPhase]        = useState<'focus' | 'break'>('focus');
+  const [round,        setRound]        = useState(1);
+  const [remaining,    setRemaining]    = useState(FOCUS_SECS);
+  const [running,      setRunning]      = useState(true);
+  const [nfcModal,     setNfcModal]     = useState(false);
+  const [nfcPhase,     setNfcPhase]     = useState<NfcModalPhase>('scanning');
 
   const startedAt      = useRef(new Date());
   const sessionIdRef   = useRef<string | null>(null);
-  const focusSecsRef   = useRef(0);   // counts only focus-phase seconds (not break time)
+  const focusSecsRef   = useRef(0);
 
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roundRef.current = round; }, [round]);
 
-  // Create the session in the DB as soon as the screen mounts.
+  // NFC pulse refs for the end-session modal
+  const nfcPulse1   = useRef(new Animated.Value(1)).current;
+  const nfcPulse2   = useRef(new Animated.Value(1)).current;
+  const nfcOpacity1 = useRef(new Animated.Value(0.45)).current;
+  const nfcOpacity2 = useRef(new Animated.Value(0.25)).current;
+
+  const startNfcPulse = () => {
+    const ring = (scale: Animated.Value, op: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(scale, { toValue: 1.9, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+            Animated.timing(op,    { toValue: 0,   duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+            Animated.timing(op,    { toValue: delay === 0 ? 0.45 : 0.25, duration: 0, useNativeDriver: true }),
+          ]),
+        ])
+      );
+    ring(nfcPulse1, nfcOpacity1, 0).start();
+    ring(nfcPulse2, nfcOpacity2, 750).start();
+  };
+
+  const stopNfcPulse = () => {
+    nfcPulse1.stopAnimation(); nfcPulse1.setValue(1); nfcOpacity1.setValue(0.45);
+    nfcPulse2.stopAnimation(); nfcPulse2.setValue(1); nfcOpacity2.setValue(0.25);
+  };
+
   useEffect(() => {
     if (!nav.token) return;
     const now = startedAt.current;
+    const nfcTag = nav.params.nfcTag || null;
     apiFetch<{ id: string }>('/sessions', nav.token, {
       method: 'POST',
       body: JSON.stringify({
@@ -66,6 +101,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         blockedApps,
         dateStr:     toDateStr(now),
         startedAt:   now.toISOString(),
+        nfcTagUid:   nfcTag,
       }),
     })
       .then(data => { sessionIdRef.current = data.id; })
@@ -111,6 +147,60 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     return () => clearTimeout(t);
   }, [remaining]);
 
+  // Core end logic — called after NFC scan (with uid) or directly (without).
+  const doEnd = async (nfcTagUid: string | null) => {
+    const elapsed         = focusSecsRef.current;
+    const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
+    const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));
+    const distractionsVal = Math.max(
+      0,
+      Math.floor(actualMinutes / 20) + (completionRatio < 0.9 ? 1 : 0),
+    );
+    const pomoBon = isPomo ? 8 : 0;
+    const penalty = Math.min(24, distractionsVal * 4);
+    const score   = Math.min(
+      99,
+      Math.max(20, Math.round(completionRatio * 80) + pomoBon - penalty + 12),
+    );
+    const endedAt = new Date();
+
+    let finalScore = score;
+    let streak     = '0';
+
+    if (nav.token && sessionIdRef.current) {
+      try {
+        const res = await apiFetch<{ session: { focusScore: number | null }; streak: number }>(
+          `/sessions/${sessionIdRef.current}/end`, nav.token, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              status:           'COMPLETED',
+              timerState:       { actualDuration: actualMinutes },
+              focusScore:       score,
+              distractionCount: distractionsVal,
+              endedAt:          endedAt.toISOString(),
+              nfcTagUid,
+            }),
+          },
+        );
+        finalScore = res.session.focusScore ?? score;
+        streak     = String(res.streak);
+        nav.refreshSessions();
+      } catch {
+        // Network failure — continue with local values
+      }
+    }
+
+    nav.navigate('SessionComplete', {
+      ...nav.params,
+      actualMinutes: String(actualMinutes),
+      focusScore:    String(finalScore),
+      blockedCount:  String(blockedApps.length),
+      distractions:  String(distractionsVal),
+      streak,
+    });
+  };
+
+  // End button: shows Alert, then ends without NFC.
   const confirmEnd = () => {
     const isComplete = remaining === 0;
     Alert.alert(
@@ -121,61 +211,49 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         {
           text:  isComplete ? 'View Summary' : 'End Session',
           style: isComplete ? 'default'      : 'destructive',
-          onPress: async () => {
-            const elapsed         = focusSecsRef.current;
-            const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
-            const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));
-            const distractionsVal = Math.max(
-              0,
-              Math.floor(actualMinutes / 20) + (completionRatio < 0.9 ? 1 : 0),
-            );
-            const pomoBon = isPomo ? 8 : 0;
-            const penalty = Math.min(24, distractionsVal * 4);
-            const score   = Math.min(
-              99,
-              Math.max(20, Math.round(completionRatio * 80) + pomoBon - penalty + 12),
-            );
-
-            const endedAt = new Date();
-
-            let finalScore = score;
-            let streak     = '0';
-
-            if (nav.token && sessionIdRef.current) {
-              try {
-                const res = await apiFetch<{ session: { focusScore: number | null }; streak: number }>(
-                  `/sessions/${sessionIdRef.current}/end`, nav.token, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                      status:           'COMPLETED',
-                      timerState:       { actualDuration: actualMinutes },
-                      focusScore:       score,
-                      distractionCount: distractionsVal,
-                      endedAt:          endedAt.toISOString(),
-                    }),
-                  },
-                );
-                finalScore = res.session.focusScore ?? score;
-                streak     = String(res.streak);
-                nav.refreshSessions();
-              } catch {
-                // Network failure — continue with local values
-              }
-            }
-
-            nav.navigate('SessionComplete', {
-              ...nav.params,
-              actualMinutes: String(actualMinutes),
-              focusScore:    String(finalScore),
-              blockedCount:  String(blockedApps.length),
-              distractions:  String(distractionsVal),
-              streak,
-            });
-          },
+          onPress: () => doEnd(null),
         },
       ],
       { cancelable: true },
     );
+  };
+
+  // NFC row: scans first, then ends with the verified UID.
+  const openNfcEndModal = async () => {
+    setNfcModal(true);
+    setNfcPhase('scanning');
+    startNfcPulse();
+    try {
+      await initNFC();
+      const uid = await readTag();
+      stopNfcPulse();
+
+      const match = nav.userTags.find(t => t.tagId.uid === uid);
+      if (!match) {
+        setNfcPhase('unregistered');
+        return;
+      }
+
+      setNfcModal(false);
+      doEnd(uid);
+    } catch {
+      // User cancelled the iOS sheet — dismiss modal silently
+      stopNfcPulse();
+      setNfcModal(false);
+    }
+  };
+
+  const skipNfcEnd = () => {
+    cancelScan();
+    stopNfcPulse();
+    setNfcModal(false);
+    doEnd(null);
+  };
+
+  const dismissNfcModal = () => {
+    cancelScan();
+    stopNfcPulse();
+    setNfcModal(false);
   };
 
   const phaseDuration = phase === 'focus' ? FOCUS_SECS : BREAK_SECS;
@@ -261,11 +339,62 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             <View style={styles.divider} />
           </>
         )}
-        <TouchableOpacity style={styles.nfcRow} onPress={confirmEnd} activeOpacity={0.7}>
-          <Ionicons name="radio-outline" size={20} color={colors.muted} />
-          <Text style={styles.nfcText}>Tap NFC tag to end session</Text>
-        </TouchableOpacity>
+        {nav.userTags.length > 0 && (
+          <TouchableOpacity style={styles.nfcRow} onPress={openNfcEndModal} activeOpacity={0.7}>
+            <Ionicons name="radio-outline" size={20} color={colors.muted} />
+            <Text style={styles.nfcText}>Tap NFC tag to end session</Text>
+          </TouchableOpacity>
+        )}
       </Card>
+
+      {/* NFC end-session modal */}
+      <Modal visible={nfcModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {nfcPhase === 'scanning' && (
+              <>
+                <View style={styles.nfcRingContainer}>
+                  <Animated.View style={[styles.nfcRing, { transform: [{ scale: nfcPulse1 }], opacity: nfcOpacity1 }]} />
+                  <Animated.View style={[styles.nfcRing, { transform: [{ scale: nfcPulse2 }], opacity: nfcOpacity2 }]} />
+                  <View style={styles.nfcCenter}>
+                    <Ionicons name="radio-outline" size={28} color="#fff" />
+                  </View>
+                </View>
+                <Text style={styles.modalTitle}>Hold tag to end session</Text>
+                <Text style={styles.modalSub}>Bring your NFC tag near the top of your iPhone.</Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={dismissNfcModal}>
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalSkipBtn} onPress={skipNfcEnd}>
+                    <Text style={styles.modalSkipText}>Skip & End</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {nfcPhase === 'unregistered' && (
+              <>
+                <View style={styles.modalWarnIcon}>
+                  <Ionicons name="alert-circle" size={48} color="#F5A623" />
+                </View>
+                <Text style={styles.modalTitle}>Unknown Tag</Text>
+                <Text style={styles.modalSub}>
+                  This tag isn't registered to your account.
+                </Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setNfcPhase('scanning'); openNfcEndModal(); }}>
+                    <Text style={styles.modalCancelText}>Try Again</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalSkipBtn} onPress={skipNfcEnd}>
+                    <Text style={styles.modalSkipText}>Skip & End</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -301,4 +430,34 @@ const styles = StyleSheet.create({
   divider:       { height: 1, backgroundColor: colors.darkBorder, marginVertical: spacing.md },
   nfcRow:        { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   nfcText:       { fontSize: fontSize.sm, color: colors.muted },
+
+  // NFC end modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center', justifyContent: 'center', padding: 32,
+  },
+  modalCard: {
+    backgroundColor: colors.white, borderRadius: radii.xl,
+    padding: 28, alignItems: 'center', width: '100%', maxWidth: 340,
+  },
+  nfcRingContainer: {
+    width: 130, height: 130,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+  },
+  nfcRing: {
+    position: 'absolute', width: 100, height: 100, borderRadius: 50,
+    backgroundColor: colors.ink,
+  },
+  nfcCenter: {
+    width: 66, height: 66, borderRadius: 33,
+    backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center',
+  },
+  modalWarnIcon: { marginBottom: 12 },
+  modalTitle:    { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8, textAlign: 'center' },
+  modalSub:      { fontSize: fontSize.sm, color: colors.muted, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  modalActions:  { flexDirection: 'row', gap: 12, width: '100%' },
+  modalCancelBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
+  modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },
+  modalSkipBtn:   { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.ink },
+  modalSkipText:  { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
 });
