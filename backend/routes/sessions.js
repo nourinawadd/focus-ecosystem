@@ -159,6 +159,17 @@ router.patch('/:id/end', async (req, res) => {
     if (nfcTagUid) session.nfcTagUid = nfcTagUid;
     await session.save();
 
+    // Log NFC_VERIFIED before SESSION_ENDED so the event order is chronological
+    if (nfcTagUid) {
+      await FocusLog.create({
+        sessionId: session._id,
+        userId:    req.user._id,
+        event:     'NFC_VERIFIED',
+        timestamp: endTime,
+        metadata:  { uid: nfcTagUid },
+      });
+    }
+
     // Log SESSION_ENDED
     await FocusLog.create({
       sessionId: session._id,

@@ -2,6 +2,7 @@
 // User preferences. Every change is immediately synced to PATCH /user/settings.
 import React from 'react';
 import { View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
@@ -153,6 +154,21 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         />
       </View>
 
+      <Text style={s.sectionLabel}>CONNECTED HARDWARE</Text>
+      <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.75}>
+        <View style={s.linkRow}>
+          <View style={s.rowInfo}>
+            <Text style={s.rowLabel}>NFC Tags</Text>
+            <Text style={s.rowDesc}>
+              {nav.userTags.length === 0
+                ? 'No tags registered — add one to verify your focus location'
+                : `${nav.userTags.length} tag${nav.userTags.length === 1 ? '' : 's'} registered`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={s.rowDesc.color as string} />
+        </View>
+      </TouchableOpacity>
+
       <View style={{ height: 48 }} />
     </ScrollView>
   );
@@ -174,6 +190,7 @@ const s = StyleSheet.create({
   profileInfo:  { flex: 1 },
   profileName:  { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 2 },
   profileEmail: { fontSize: fontSize.sm, color: colors.muted },
+  linkRow:      { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
   toggleRow:    { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
   rowInfo:      { flex: 1, marginRight: spacing.md },
   rowLabel:     { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginBottom: 2 },

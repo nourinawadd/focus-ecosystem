@@ -3,7 +3,7 @@
 // When the token changes, sessions and user settings are re-fetched from the API.
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { SessionRecord } from './store/sessions';
-import { UserProfile, DEFAULT_USER } from './store/user';
+import { UserProfile, DEFAULT_USER, UserTag } from './store/user';
 import { View, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import SignUpScreen from './screens/SignUpScreen';
@@ -18,6 +18,7 @@ import SessionCompleteScreen from './screens/SessionCompleteScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
+import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch } from './api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,14 +42,16 @@ export type NavProps = {
   refreshSessions:  () => void;
   user:             UserProfile;
   updateUser:       (updates: Partial<UserProfile>) => void;
+  userTags:         UserTag[];
+  refreshTags:      () => void;
   token:            string | null;
   setToken:         (t: string) => void;
   signOut:          () => void;
 };
 
-export type { SessionRecord, UserProfile };
+export type { SessionRecord, UserProfile, UserTag };
 
-const COMING_SOON: ScreenName[] = ['AIInsights', 'NFCSetup'];
+const COMING_SOON: ScreenName[] = ['AIInsights'];
 const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
@@ -58,6 +61,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessions,   setSessions]   = useState<SessionRecord[]>([]);
   const [user,       setUser]       = useState<UserProfile>(DEFAULT_USER);
+  const [userTags,   setUserTags]   = useState<UserTag[]>([]);
   const [token,      setTokenState] = useState<string | null>(null);
   const [hydrated,   setHydrated]   = useState(false);
 
@@ -108,6 +112,7 @@ export default function App() {
     setTokenState(null);
     setSessions([]);
     setUser(DEFAULT_USER);
+    setUserTags([]);
     setParams({});
     setDrawerOpen(false);
     navigate('Login');
@@ -119,6 +124,13 @@ export default function App() {
       .then(setSessions)
       .catch((e: any) => { if (e?.status === 401) signOut(); });
   }, [token, signOut]);
+
+  const refreshTags = useCallback(() => {
+    if (!token) return;
+    apiFetch<UserTag[]>('/user/nfc-tags', token)
+      .then(setUserTags)
+      .catch(console.error);
+  }, [token]);
 
   // Re-fetch sessions and user profile from the API whenever the token changes.
   // On 401 (expired/invalid token), clear stored auth and bounce to Login.
@@ -134,6 +146,10 @@ export default function App() {
         if (e?.status === 401) signOut();
         else setSessions([]);
       });
+
+    apiFetch<UserTag[]>('/user/nfc-tags', token)
+      .then(setUserTags)
+      .catch(console.error);
 
     apiFetch<{ name: string; email: string; createdAt?: string; settings: Record<string, any> }>('/user/me', token)
       .then(me => updateUser({
@@ -163,6 +179,8 @@ export default function App() {
     refreshSessions,
     user,
     updateUser,
+    userTags,
+    refreshTags,
     token,
     setToken,
     signOut,
@@ -186,6 +204,7 @@ export default function App() {
         {current === 'SessionComplete' && <SessionCompleteScreen nav={nav} />}
         {current === 'History'         && <HistoryScreen nav={nav} />}
         {current === 'Analytics'       && <AnalyticsScreen nav={nav} />}
+        {current === 'NFCSetup'        && <NFCSetupScreen nav={nav} />}
         {COMING_SOON.includes(current) && <ComingSoonScreen nav={nav} screen={current} />}
       </Animated.View>
 

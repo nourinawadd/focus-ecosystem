@@ -169,12 +169,25 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         </View>
 
         {/* Actions */}
-        <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('NFCScan', startParams)} activeOpacity={0.8}>
-          <Text style={styles.nfcBtnText}>Tap NFC Tag to Start</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.7}>
-          <Text style={styles.skipBtnText}>Start Without NFC</Text>
-        </TouchableOpacity>
+        {nav.userTags.length > 0 ? (
+          <>
+            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('NFCScan', startParams)} activeOpacity={0.8}>
+              <Text style={styles.nfcBtnText}>Scan NFC Tag to Start</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.7}>
+              <Text style={styles.skipBtnText}>Start Without NFC</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.8}>
+              <Text style={styles.nfcBtnText}>Start Session</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.7}>
+              <Text style={styles.skipBtnText}>Set up NFC tags</Text>
+            </TouchableOpacity>
+          </>
+        )}
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
