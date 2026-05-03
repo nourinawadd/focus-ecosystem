@@ -17,6 +17,7 @@ import ActiveSessionScreen from './screens/ActiveSessionScreen';
 import SessionCompleteScreen from './screens/SessionCompleteScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
+import AIInsightsScreen from './screens/AIInsightsScreen';
 import ComingSoonScreen from './screens/ComingSoonScreen';
 import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
@@ -51,7 +52,7 @@ export type NavProps = {
 
 export type { SessionRecord, UserProfile, UserTag };
 
-const COMING_SOON: ScreenName[] = ['AIInsights'];
+const COMING_SOON: ScreenName[] = [];
 const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
@@ -204,6 +205,7 @@ export default function App() {
         {current === 'SessionComplete' && <SessionCompleteScreen nav={nav} />}
         {current === 'History'         && <HistoryScreen nav={nav} />}
         {current === 'Analytics'       && <AnalyticsScreen nav={nav} />}
+        {current === 'AIInsights'      && <AIInsightsScreen nav={nav} />}
         {current === 'NFCSetup'        && <NFCSetupScreen nav={nav} />}
         {COMING_SOON.includes(current) && <ComingSoonScreen nav={nav} screen={current} />}
       </Animated.View>
@@ -220,3 +222,4 @@ export default function App() {
     </View>
   );
 }
+

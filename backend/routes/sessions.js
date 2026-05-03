@@ -3,6 +3,7 @@ import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import Statistics from '../models/Statistics.js';
 import auth from '../middleware/auth.js';
+import { invalidateSuggestion } from '../services/aiSuggestionService.js';
 
 const router = express.Router();
 
@@ -182,6 +183,8 @@ router.patch('/:id/end', async (req, res) => {
     // Rebuild statistics for the day
     const streakData = await syncStats(req.user._id, session.dateStr);
 
+     invalidateSuggestion(req.user._id);
+
     res.json({
       session: Session.toFrontendRecord(session),
       streak:  streakData.streak,
@@ -237,6 +240,8 @@ router.delete('/:id', async (req, res) => {
 
     await FocusLog.deleteMany({ sessionId: session._id });
     await syncStats(req.user._id, session.dateStr);
+
+    invalidateSuggestion(req.user._id);
 
     res.json({ deleted: true });
   } catch (err) {
