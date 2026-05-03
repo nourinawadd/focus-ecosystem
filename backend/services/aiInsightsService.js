@@ -148,9 +148,11 @@ function validateAndClamp(ai) {
 
   const risk = ai.distractionRisk || {};
   const validLevels = ['low', 'medium', 'high'];
+  const rawLevel = typeof risk.level === 'string' ? risk.level.toLowerCase() : '';
+  const normalizedLevel = validLevels.includes(rawLevel) ? rawLevel : 'medium';
   const distractionRisk = {
     score: clampNumber(risk.score, 0, 100, 50),
-    level: validLevels.includes(risk.level) ? risk.level : 'medium',
+    level: normalizedLevel.charAt(0).toUpperCase() + normalizedLevel.slice(1),
     factors: Array.isArray(risk.factors)
       ? risk.factors.slice(0, 5).map(f => clampString(f, 100))
       : [],
@@ -191,11 +193,11 @@ export async function getOrGenerateInsight(userId, { force = false } = {}) {
   const aiResponse = await generateJSON(prompt);
   const validated = validateAndClamp(aiResponse);
 
-  const insight = await AIInsight.create({
-    userId,
-    ...validated,
-    generatedAt: new Date(),
-  });
+  const insight = await AIInsight.findOneAndUpdate(
+    { userId },
+    { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
+    { upsert: true, new: true },
+  );
 
   return { insight, cached: false };
 }

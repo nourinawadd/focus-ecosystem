@@ -11,9 +11,9 @@ const AIInsightSchema = new mongoose.Schema({
   bestProductiveHour: { type: Number, default: null, min: 0, max: 23 },
   optimalDuration:    { type: Number, default: null },
   suggestedSchedule:  [{
-    dayOfWeek:       { type: Number, min: 0, max: 6 },
-    recommendedTime: { type: String },
-    duration:        { type: Number },
+    day:             { type: String },
+    startHour:       { type: Number, min: 0, max: 23 },
+    durationMinutes: { type: Number },
     confidence:      { type: Number, min: 0, max: 1 },
     _id: false,
   }],

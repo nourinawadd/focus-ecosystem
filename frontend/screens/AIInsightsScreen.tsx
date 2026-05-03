@@ -48,8 +48,9 @@ const formatHour = (h: number) => {
 const dayShort = (day: string) => day.slice(0, 3).toUpperCase();
 
 const riskColor = (level: string) => {
-  if (level === 'low') return '#10b981';
-  if (level === 'medium') return '#f59e0b';
+  const l = level.toLowerCase();
+  if (l === 'low') return '#10b981';
+  if (l === 'medium') return '#f59e0b';
   return '#ef4444';
 };
 
@@ -248,7 +249,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
 
           {/* Suggested schedule */}
           <SectionLabel>Suggested schedule</SectionLabel>
-          {insight.suggestedSchedule.map((slot, i) => (
+          {insight.suggestedSchedule.filter(s => s.day != null).map((slot, i) => (
             <Card key={i} style={styles.scheduleCard}>
               <View style={styles.dayBadge}>
                 <Text style={styles.dayBadgeText}>{dayShort(slot.day)}</Text>
