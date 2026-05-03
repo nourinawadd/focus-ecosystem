@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
@@ -7,6 +7,7 @@ import SectionLabel from '../components/SectionLabel';
 import PillBadge from '../components/PillBadge';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr } from '../store/sessions';
+import { apiFetch } from '../api/client';
 import type { SessionRecord } from '../App';
 
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
@@ -29,6 +30,21 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const name     = user.name !== 'User' ? user.name : (nav.params.name ?? 'User');
   const initial  = name.charAt(0).toUpperCase();
   const focusDay = `FOCUS ${DAYS[new Date().getDay()]}`;
+
+  // ── AI suggestion (with local fallback) ─────────────────────────────────────
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!nav.token) return;
+    apiFetch<{ suggestion: string } | null>('/ai/suggestion', nav.token)
+      .then(res => {
+        if (res?.suggestion) setAiSuggestion(res.suggestion);
+      })
+      .catch(() => {
+        // Silent fail — we'll fall back to the local heuristic below
+      });
+  }, [nav.token, sessions.length]);
+
 
   // ── Live stats from shared session store ────────────────────────────────────
   const SCORE         = computeTodayScore(sessions);
@@ -107,25 +123,31 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         </View>
       </Card>
 
-      {/* ── Smart Suggestion (driven by real session data) ────────────────── */}
-      <Card style={styles.mb14} padding={18}>
-        <View style={styles.suggestionHeader}>
-          <Ionicons name="bulb-outline" size={13} color={colors.muted} />
-          <SectionLabel noTopMargin style={styles.suggestionLabelOverride}>Smart Suggestion</SectionLabel>
-        </View>
-        {bestTime ? (
-          <Text style={styles.suggestionText}>
-            You're most productive around {bestTime}.{'\n'}
-            {dailyPct < 100
-              ? `${user.dailyGoalMinutes - todayMins} min left to hit today's goal.`
-              : "You've hit today's focus goal — great work!"}
-          </Text>
-        ) : (
-          <Text style={styles.suggestionText}>
-            Complete your first session to unlock personalised insights.
-          </Text>
-        )}
-      </Card>
+      {/* ── Smart Suggestion (AI-powered, with local fallback) ─────────────── */}
+      <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('AIInsights')}>
+        <Card style={styles.mb14} padding={18}>
+          <View style={styles.suggestionHeader}>
+            <Ionicons name="bulb-outline" size={13} color={colors.muted} />
+            <SectionLabel noTopMargin style={styles.suggestionLabelOverride}>Smart Suggestion</SectionLabel>
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+          </View>
+          {aiSuggestion ? (
+            <Text style={styles.suggestionText}>{aiSuggestion}</Text>
+          ) : bestTime ? (
+            <Text style={styles.suggestionText}>
+              You're most productive around {bestTime}.{'\n'}
+              {dailyPct < 100
+                ? `${user.dailyGoalMinutes - todayMins} min left to hit today's goal.`
+                : "You've hit today's focus goal — great work!"}
+            </Text>
+          ) : (
+            <Text style={styles.suggestionText}>
+              Complete your first session to unlock personalised insights.
+            </Text>
+          )}
+        </Card>
+      </TouchableOpacity>
 
       {/* ── Start CTA ─────────────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => nav.navigate('CreateSession')}>
@@ -135,6 +157,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
     </ScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   screen:     { flex: 1, backgroundColor: colors.bg },
