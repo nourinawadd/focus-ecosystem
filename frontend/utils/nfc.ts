@@ -1,14 +1,24 @@
-// Stub for Expo Go — react-native-nfc-manager requires a custom dev build.
-// isNFCSupported returns false so all NFC UI degrades gracefully (skip buttons stay visible).
+import NfcManager, { NfcTech } from 'react-native-nfc-manager';
 
-export async function initNFC(): Promise<void> {}
+export async function initNFC(): Promise<void> {
+  await NfcManager.start();
+}
 
 export async function isNFCSupported(): Promise<boolean> {
-  return false;
+  return NfcManager.isSupported();
 }
 
 export async function readTag(): Promise<string> {
-  throw new Error('NFC not supported in Expo Go');
+  try {
+    await NfcManager.requestTechnology(NfcTech.Ndef);
+    const tag = await NfcManager.getTag();
+    if (!tag?.id) throw new Error('No tag ID found');
+    return tag.id.toUpperCase();
+  } finally {
+    await NfcManager.cancelTechnologyRequest().catch(() => {});
+  }
 }
 
-export function cancelScan(): void {}
+export function cancelScan(): void {
+  NfcManager.cancelTechnologyRequest().catch(() => {});
+}

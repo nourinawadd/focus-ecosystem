@@ -17,6 +17,9 @@
       "bundleIdentifier": "com.gradproject.anchor",
       "infoPlist": {
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
+      },
+      "entitlements": {
+        "com.apple.developer.nfc.readersession.formats": ["NDEF"]
       }
     },
     "android": {

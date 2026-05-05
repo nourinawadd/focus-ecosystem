@@ -6,7 +6,13 @@
       "Bash(npx expo *)",
       "Bash(node *)",
       "Bash(curl -fsS http://localhost:5000/api/health -o /dev/null)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npm install *)",
+      "Bash(git -C \"/home/nourinawad/grad project/focus-ecosystem\" diff --stat HEAD)",
+      "Bash(git -C \"/home/nourinawad/grad project/focus-ecosystem\" status)",
+      "Bash(git -C '/home/nourinawad/grad project/focus-ecosystem' add backend/routes/sessions.js frontend/App.tsx frontend/app.json frontend/package-lock.json frontend/package.json frontend/screens/ActiveSessionScreen.tsx frontend/screens/CreateSessionScreen.tsx frontend/screens/NFCScreen.tsx frontend/screens/NFCSetupScreen.tsx frontend/screens/SettingsScreen.tsx frontend/store/user.ts frontend/utils/ frontend/ios/)",
+      "Bash(git -C '/home/nourinawad/grad project/focus-ecosystem' add backend/routes/sessions.js frontend/.gitignore frontend/App.tsx frontend/app.json frontend/package-lock.json frontend/package.json frontend/screens/ActiveSessionScreen.tsx frontend/screens/CreateSessionScreen.tsx frontend/screens/NFCScreen.tsx frontend/screens/NFCSetupScreen.tsx frontend/screens/SettingsScreen.tsx frontend/store/user.ts frontend/utils/ frontend/ios/)",
+      "Bash(git -C '/home/nourinawad/grad project/focus-ecosystem' commit -m ' *)"
     ]
   }
 }
