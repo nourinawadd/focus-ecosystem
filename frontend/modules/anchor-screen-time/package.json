@@ -1,0 +1,8 @@
+{
+  "name": "anchor-screen-time",
+  "version": "0.1.0",
+  "description": "Local Expo module wrapping Apple FamilyControls / ManagedSettings for app blocking during focus sessions.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true
+}

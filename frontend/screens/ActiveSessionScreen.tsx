@@ -12,6 +12,12 @@ import PillBadge from '../components/PillBadge';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import {
+  isSupported as screenTimeSupported,
+  hasSelection as screenTimeHasSelection,
+  applyShield as applyScreenTimeShield,
+  clearShield as clearScreenTimeShield,
+} from '../../modules/anchor-screen-time/src';
 
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -48,6 +54,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const startedAt      = useRef(new Date());
   const sessionIdRef   = useRef<string | null>(null);
   const focusSecsRef   = useRef(0);
+  const shieldAppliedRef = useRef(false);
 
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
@@ -109,6 +116,27 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Apply the Screen Time shield on mount; clear on unmount as a safety net.
+  useEffect(() => {
+    if (!screenTimeSupported()) return;
+    (async () => {
+      try {
+        if (await screenTimeHasSelection()) {
+          await applyScreenTimeShield();
+          shieldAppliedRef.current = true;
+        }
+      } catch {
+        // Authorization revoked or no selection — silently skip, session continues
+      }
+    })();
+    return () => {
+      if (shieldAppliedRef.current) {
+        clearScreenTimeShield().catch(() => {});
+        shieldAppliedRef.current = false;
+      }
+    };
+  }, []);
+
   const tickAnim = useRef(new Animated.Value(1)).current;
   const pulseTick = () =>
     Animated.sequence([
@@ -149,6 +177,10 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
 
   // Core end logic — called after NFC scan (with uid) or directly (without).
   const doEnd = async (nfcTagUid: string | null) => {
+    if (shieldAppliedRef.current) {
+      clearScreenTimeShield().catch(() => {});
+      shieldAppliedRef.current = false;
+    }
     const elapsed         = focusSecsRef.current;
     const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
     const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));

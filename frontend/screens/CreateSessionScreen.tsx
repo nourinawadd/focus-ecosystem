@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Switch, StyleSheet, Platform,
+  Switch, StyleSheet, Platform, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
+import {
+  isSupported as screenTimeSupported,
+  getAuthorizationStatus,
+  requestAuthorization,
+  presentPicker,
+  getSelectionSummary,
+  formatSummary,
+  summaryTotal,
+  type ScreenTimeSelectionSummary,
+  type ScreenTimeAuthStatus,
+} from '../../modules/anchor-screen-time/src';
 
 const SESSION_TYPES = ['Study', 'Work', 'Custom'] as const;
 const DURATIONS = [15, 25, 30, 45, 60, 90];
@@ -32,6 +43,50 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [pomoRounds, setPomoRounds] = useState(2);
   const [blockedApps, setBlockedApps] = useState<string[]>(['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit']);
   const [showAllApps, setShowAllApps] = useState(false);
+  const [stSummary, setStSummary]   = useState<ScreenTimeSelectionSummary | null>(null);
+  const [stStatus,  setStStatus]    = useState<ScreenTimeAuthStatus>('notDetermined');
+  const [stBusy,    setStBusy]      = useState(false);
+
+  useEffect(() => {
+    if (!screenTimeSupported()) return;
+    let alive = true;
+    (async () => {
+      try {
+        const [status, summary] = await Promise.all([getAuthorizationStatus(), getSelectionSummary()]);
+        if (!alive) return;
+        setStStatus(status);
+        setStSummary(summary);
+      } catch {
+        // ignore — surface in the configure flow
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const configureScreenTime = async () => {
+    if (!screenTimeSupported()) return;
+    setStBusy(true);
+    try {
+      let status = stStatus;
+      if (status !== 'approved') {
+        status = await requestAuthorization();
+        setStStatus(status);
+      }
+      if (status !== 'approved') {
+        Alert.alert(
+          'Screen Time access needed',
+          'Anchor needs Screen Time access to shield distracting apps during your sessions. You can enable it later in Settings.',
+        );
+        return;
+      }
+      const summary = await presentPicker();
+      if (summary !== null) setStSummary(summary);
+    } catch (err: any) {
+      Alert.alert('Screen Time error', err?.message ?? 'Could not open the app picker.');
+    } finally {
+      setStBusy(false);
+    }
+  };
 
   const pomoDuration = pomoPreset.work * pomoRounds;
 
@@ -168,6 +223,34 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           )}
         </View>
 
+        {/* Screen Time real blocking (iOS only) */}
+        {screenTimeSupported() && (
+          <>
+            <SectionLabel>Screen Time Shield</SectionLabel>
+            <TouchableOpacity
+              style={styles.stCard}
+              onPress={configureScreenTime}
+              activeOpacity={0.85}
+              disabled={stBusy}
+            >
+              <View style={styles.stIconWrap}>
+                <Ionicons name="shield-checkmark-outline" size={22} color={colors.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stTitle}>
+                  {summaryTotal(stSummary) > 0 ? 'Apps blocked by iOS' : 'Configure blocked apps'}
+                </Text>
+                <Text style={styles.stSub} numberOfLines={1}>
+                  {stStatus !== 'approved'
+                    ? 'Tap to grant Screen Time access'
+                    : formatSummary(stSummary)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </TouchableOpacity>
+          </>
+        )}
+
         {/* Actions */}
         {nav.userTags.length > 0 ? (
           <>
@@ -231,6 +314,20 @@ const styles = StyleSheet.create({
   appChipActive:    { backgroundColor: colors.ink },
   appChipText:      { fontSize: fontSize.sm, fontWeight: '500', color: colors.inkSoft },
   appChipTextActive: { color: colors.white },
+
+  stCard:    {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.border, borderRadius: radii.lg,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  stIconWrap: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stTitle:   { fontSize: fontSize.md, fontWeight: '600', color: colors.ink },
+  stSub:     { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
 
   nfcBtn:      { backgroundColor: colors.ink, borderRadius: radii.lg, paddingVertical: 16, alignItems: 'center', marginTop: 28 },
   nfcBtnText:  { color: colors.white, fontSize: fontSize.lg - 1, fontWeight: '700' },
