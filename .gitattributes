@@ -15,3 +15,10 @@ Gemfile      text eol=lf
 *.icns binary
 *.pdf  binary
 *.zip  binary
+*.tgz  binary
+*.tar  binary
+*.gz   binary
+*.p8   binary
+*.p12  binary
+*.jks  binary
+*.mobileprovision binary
