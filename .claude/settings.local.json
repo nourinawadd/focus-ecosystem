@@ -27,7 +27,8 @@
       "Bash(npx expo-modules-autolinking *)",
       "Bash(echo \"exit:$?\")",
       "WebFetch(domain:expo.dev)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(findstr /C:\"anchor\" /C:\"AnchorScreen\")"
     ]
   }
 }
