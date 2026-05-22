@@ -22,7 +22,8 @@
       "PowerShell(Get-Content *)",
       "Bash(git -C \"D:\\\\UNIVERSITY\\\\Graduation Project\\\\focus-ecosystem\" config --get core.autocrlf)",
       "Bash(git log *)",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

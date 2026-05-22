@@ -76,9 +76,13 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       setScannedUid(uid);
       setLabelInput('');
       setScanPhase('naming');
-    } catch {
+    } catch (e: any) {
       stopPulse();
       setScanPhase('idle');
+      const msg: string = e?.message ?? String(e) ?? '';
+      if (!/cancel/i.test(msg)) {
+        Alert.alert('Scan Failed', msg || 'NFC scan failed. Try again.');
+      }
     }
   };
 

@@ -89,11 +89,17 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
       }
 
       playSuccess(uid);
-    } catch {
+    } catch (e: any) {
       stopPulse();
-      // User cancelled the iOS system sheet or scan failed — just reset quietly
-      setPhase('scanning');
-      startPulse();
+      const msg: string = e?.message ?? String(e) ?? '';
+      // Treat "user cancelled" as a silent retry; surface everything else.
+      if (/cancel/i.test(msg)) {
+        setPhase('scanning');
+        startPulse();
+        return;
+      }
+      setErrMsg(msg || 'NFC scan failed.');
+      setPhase('error');
     }
   };
 
