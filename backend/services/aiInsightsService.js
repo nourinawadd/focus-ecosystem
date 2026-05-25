@@ -1,7 +1,7 @@
 import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import AIInsight from '../models/AIInsight.js';
-import { generateJSON, isGeminiConfigured } from '../config/gemini.js';
+import { generateJSON, isGeminiConfigured, INSIGHT_SCHEMA } from '../config/gemini.js';
 
 const CACHE_HOURS = 6;
 const MIN_SESSIONS = 3;
@@ -190,7 +190,7 @@ export async function getOrGenerateInsight(userId, { force = false } = {}) {
   }
 
   const prompt = buildPrompt(profile);
-  const aiResponse = await generateJSON(prompt);
+    const aiResponse = await generateJSON(prompt, INSIGHT_SCHEMA);
   const validated = validateAndClamp(aiResponse);
 
   const insight = await AIInsight.findOneAndUpdate(

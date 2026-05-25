@@ -68,7 +68,8 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
     setError(null);
     setNeedsMoreData(false);
     try {
-      const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
+        const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
+        console.log('AI response:', JSON.stringify(res));
       if (!res) {
         setNeedsMoreData(true);
         setInsight(null);
