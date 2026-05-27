@@ -3,7 +3,11 @@ import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import Statistics from '../models/Statistics.js';
 import auth from '../middleware/auth.js';
-import { assertObjectId } from '../utils/validation.js';
+import asyncHandler from '../middleware/asyncHandler.js';
+import {
+  requireObjectId, requireInt, requireEnum, requireString, requireDateStr, badRequest,
+} from '../middleware/validate.js';
+import { userTodayStr, shiftDateStr } from '../utils/datetime.js';
 import { invalidateSuggestion } from '../services/aiSuggestionService.js';
 
 const router = express.Router();
@@ -11,25 +15,6 @@ const router = express.Router();
 router.use(auth);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toDateStr(d) {
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-/** Consecutive-day streak from an array of active dateStr strings. */
-function computeStreak(activeDates) {
-  const set = new Set(activeDates);
-  const d   = new Date();
-  let streak = 0;
-  while (set.has(toDateStr(d))) {
-    streak++;
-    d.setDate(d.getDate() - 1);
-  }
-  return streak;
-}
 
 /** Compute score using the same formula as the frontend ActiveSessionScreen. */
 function computeFocusScore(actualMins, plannedMins, isPomo, distractionCount) {
@@ -39,228 +24,238 @@ function computeFocusScore(actualMins, plannedMins, isPomo, distractionCount) {
   return Math.min(99, Math.max(20, Math.round(ratio * 80) + pomoBon - penalty + 12));
 }
 
-/**
- * After any session mutation, resync:
- *   - Statistics document for the affected day
- *   - Streak values (passed into Statistics.rebuildForDay)
- */
-async function syncStats(userId, dateStr) {
-  const completedSessions = await Session.find({ userId, status: 'COMPLETED' });
-  const activeDates = [...new Set(completedSessions.map(s => s.dateStr))];
-  const streak      = computeStreak(activeDates);
+/** Validate + normalize the blockedApps array (≤50 items, each ≤200 chars). */
+function validateBlockedApps(arr) {
+  if (arr === undefined || arr === null) return [];
+  if (!Array.isArray(arr)) throw badRequest('blockedApps must be an array');
+  if (arr.length > 50)     throw badRequest('blockedApps may contain at most 50 items');
+  return arr.map((a, i) => requireString(a, { max: 200, field: `blockedApps[${i}]` }));
+}
 
-  // Longest streak — walk sorted dates
-  const sorted = [...activeDates].sort();
-  let maxStreak = 0, cur = 0, prev = null;
-  for (const ds of sorted) {
-    const diff = prev
-      ? Math.round((new Date(ds + 'T12:00:00') - new Date(prev + 'T12:00:00')) / 86_400_000)
-      : null;
-    cur = diff === 1 ? cur + 1 : 1;
-    if (cur > maxStreak) maxStreak = cur;
-    prev = ds;
+/**
+ * Current streak: walk back day-by-day from today (user tz), hitting the
+ * unique {userId, dateStr} index, until a day without a completed session.
+ * O(streak length) rather than O(all sessions). Longest streak only grows, so
+ * it's max(current, the largest longestStreak already recorded).
+ */
+async function computeStreaks(userId, tz) {
+  let cursor  = userTodayStr(tz);
+  let current = 0;
+  for (;;) {
+    const stat = await Statistics.findOne({ userId, dateStr: cursor }, { sessionsCompleted: 1 });
+    if (stat?.sessionsCompleted > 0) {
+      current++;
+      cursor = shiftDateStr(cursor, -1);
+    } else break;
   }
 
-  await Statistics.rebuildForDay(userId, dateStr, {
-    streak,
-    longestStreak: Math.max(maxStreak, streak),
-  });
+  const longestDoc = await Statistics
+    .findOne({ userId }, { longestStreak: 1 })
+    .sort({ longestStreak: -1 });
+  const longest = Math.max(current, longestDoc?.longestStreak ?? 0);
 
-  return { streak, longestStreak: Math.max(maxStreak, streak) };
+  return { current, longest };
+}
+
+/**
+ * After any session mutation: rebuild the affected day's metrics, recompute the
+ * streak efficiently, and persist it. Statistics is never mutated directly.
+ */
+async function syncStats(userId, dateStr, tz) {
+  await Statistics.rebuildForDay(userId, dateStr, tz);
+  const { current, longest } = await computeStreaks(userId, tz);
+  await Statistics.setStreak(userId, dateStr, current, longest);
+  return { streak: current, longestStreak: longest };
 }
 
 // ─── GET /api/sessions ────────────────────────────────────────────────────────
 // Query params: ?status=COMPLETED&dateStr=YYYY-MM-DD&limit=50
-router.get('/', async (req, res) => {
-  try {
-    const filter = { userId: req.user._id };
-    if (req.query.status)  filter.status  = req.query.status;
-    if (req.query.dateStr) filter.dateStr = req.query.dateStr;
+router.get('/', asyncHandler(async (req, res) => {
+  const filter = { userId: req.user._id };
+  if (req.query.status)  filter.status  = req.query.status;
+  if (req.query.dateStr) filter.dateStr = req.query.dateStr;
 
-    const sessions = await Session
-      .find(filter)
-      .sort({ dateStr: -1, startedAt: -1 })
-      .limit(Number(req.query.limit) || 100);
+  const sessions = await Session
+    .find(filter)
+    .sort({ dateStr: -1, startedAt: -1 })
+    .limit(Number(req.query.limit) || 100);
 
-    res.json(sessions.map(Session.toFrontendRecord));
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  res.json(sessions.map(Session.toFrontendRecord));
+}));
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
-// Create a new session (PENDING state) when the user taps "Start".
+// Create a new session (ACTIVE state) when the user taps "Start".
 // Body: { type, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid? }
-router.post('/', async (req, res) => {
-  try {
-    const {
-      type, timerMode, timerConfig, blockedApps,
-      dateStr, startedAt, nfcTagUid,
-    } = req.body;
+router.post('/', asyncHandler(async (req, res) => {
+  const { type, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid } = req.body;
 
-    if (!timerConfig?.plannedDuration || !dateStr)
-      return res.status(400).json({ message: 'timerConfig.plannedDuration and dateStr are required' });
+  requireDateStr(dateStr);
+  if (!timerConfig || typeof timerConfig !== 'object')
+    throw badRequest('timerConfig is required');
 
-    const session = await Session.create({
-      userId:      req.user._id,
-      type:        type      || 'STUDY',
-      status:      'ACTIVE',
-      timerMode:   timerMode || 'COUNTDOWN',
-      timerConfig: {
-        plannedDuration: timerConfig.plannedDuration,
-        pomodoroWork:    timerConfig.pomodoroWork  || req.user.settings.pomodoroWork,
-        pomodoroBreak:   timerConfig.pomodoroBreak || req.user.settings.pomodoroBreak,
-        pomodoroRounds:  timerConfig.pomodoroRounds || 4,
-      },
-      blockedApps: blockedApps || [],
-      dateStr,
-      startedAt:   startedAt ? new Date(startedAt) : new Date(),
-      nfcTagUid:   nfcTagUid || null,
-    });
+  const finalType = type === undefined
+    ? 'STUDY'
+    : requireEnum(type, ['STUDY', 'WORK', 'CUSTOM'], { field: 'type' });
+  const finalMode = timerMode === undefined
+    ? 'COUNTDOWN'
+    : requireEnum(timerMode, ['COUNTDOWN', 'POMODORO', 'STOPWATCH'], { field: 'timerMode' });
 
-    // Log SESSION_STARTED event
-    await FocusLog.create({
-      sessionId: session._id,
-      userId:    req.user._id,
-      event:     'SESSION_STARTED',
-      timestamp: session.startedAt,
-    });
+  const plannedDuration = requireInt(timerConfig.plannedDuration, { min: 1, max: 480, field: 'timerConfig.plannedDuration' });
+  const pomodoroWork = timerConfig.pomodoroWork === undefined
+    ? req.user.settings.pomodoroWork
+    : requireInt(timerConfig.pomodoroWork, { min: 1, max: 60, field: 'timerConfig.pomodoroWork' });
+  const pomodoroBreak = timerConfig.pomodoroBreak === undefined
+    ? req.user.settings.pomodoroBreak
+    : requireInt(timerConfig.pomodoroBreak, { min: 1, max: 60, field: 'timerConfig.pomodoroBreak' });
+  const pomodoroRounds = timerConfig.pomodoroRounds === undefined
+    ? 4
+    : requireInt(timerConfig.pomodoroRounds, { min: 1, max: 20, field: 'timerConfig.pomodoroRounds' });
 
-    res.status(201).json(Session.toFrontendRecord(session));
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  const apps = validateBlockedApps(blockedApps);
+
+  const session = await Session.create({
+    userId:      req.user._id,
+    type:        finalType,
+    status:      'ACTIVE',
+    timerMode:   finalMode,
+    timerConfig: { plannedDuration, pomodoroWork, pomodoroBreak, pomodoroRounds },
+    blockedApps: apps,
+    dateStr,
+    startedAt:   startedAt ? new Date(startedAt) : new Date(),
+    nfcTagUid:   nfcTagUid || null,
+  });
+
+  await FocusLog.create({
+    sessionId: session._id,
+    userId:    req.user._id,
+    event:     'SESSION_STARTED',
+    timestamp: session.startedAt,
+  });
+
+  res.status(201).json(Session.toFrontendRecord(session));
+}));
 
 // ─── PATCH /api/sessions/:id/end ─────────────────────────────────────────────
-// Called when the user ends a session (from ActiveSessionScreen confirmEnd).
-// Body: { status: 'COMPLETED'|'ABANDONED', timerState, focusScore?, endedAt?, nfcTagUid? }
-router.patch('/:id/end', async (req, res) => {
-  if (!assertObjectId(req.params.id, res)) return;
-  try {
-    const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
-    if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.status !== 'ACTIVE')
-      return res.status(400).json({ message: `Session is already ${session.status}` });
+// Body: { status: 'COMPLETED'|'ABANDONED', timerState, endedAt?, nfcTagUid? }
+router.patch('/:id/end', asyncHandler(async (req, res) => {
+  requireObjectId(req.params.id);
 
-    const { status, timerState, endedAt, nfcTagUid } = req.body;
-    const finalStatus = ['COMPLETED', 'ABANDONED'].includes(status) ? status : 'ABANDONED';
-    const endTime     = endedAt ? new Date(endedAt) : new Date();
+  const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
+  if (!session) return res.status(404).json({ message: 'Session not found' });
+  if (session.status !== 'ACTIVE')
+    return res.status(400).json({ message: `Session is already ${session.status}` });
 
-    // Focus score is computed server-side from authoritative sources only.
-    // Client-supplied focusScore / distractionCount values are ignored to preserve integrity.
-    const actualMins       = timerState?.actualDuration || 0;
-    const distractionCount = await FocusLog.countDocuments({
-      sessionId: session._id,
-      event:     'APP_BLOCKED',
-    });
-    const isPomo           = session.timerMode === 'POMODORO';
-    const focusScore       = finalStatus === 'COMPLETED'
-      ? computeFocusScore(actualMins, session.timerConfig.plannedDuration, isPomo, distractionCount)
-      : null;
+  const { status, timerState, endedAt, nfcTagUid } = req.body;
+  const finalStatus = ['COMPLETED', 'ABANDONED'].includes(status) ? status : 'ABANDONED';
+  const endTime     = endedAt ? new Date(endedAt) : new Date();
 
-    session.status     = finalStatus;
-    // Whitelist timerState fields — never assign the raw client object.
-    session.timerState = {
-      actualDuration:          timerState?.actualDuration          ?? 0,
-      pomodoroRoundsCompleted: timerState?.pomodoroRoundsCompleted ?? 0,
-      breaks:                  timerState?.breaks                  ?? 0,
-    };
-    session.focusScore = focusScore;
-    session.endedAt    = endTime;
-    if (nfcTagUid) session.nfcTagUid = nfcTagUid;
-    await session.save();
+  // Focus score is computed server-side from authoritative sources only.
+  // Client-supplied focusScore / distractionCount values are ignored.
+  const actualMins       = timerState?.actualDuration || 0;
+  const distractionCount = await FocusLog.countDocuments({
+    sessionId: session._id,
+    event:     'APP_BLOCKED',
+  });
+  const isPomo     = session.timerMode === 'POMODORO';
+  const focusScore = finalStatus === 'COMPLETED'
+    ? computeFocusScore(actualMins, session.timerConfig.plannedDuration, isPomo, distractionCount)
+    : null;
 
-    // Log NFC_VERIFIED before SESSION_ENDED so the event order is chronological
-    if (nfcTagUid) {
-      await FocusLog.create({
-        sessionId: session._id,
-        userId:    req.user._id,
-        event:     'NFC_VERIFIED',
-        timestamp: endTime,
-        metadata:  { uid: nfcTagUid },
-      });
-    }
+  // Atomic transition: the guard on status:'ACTIVE' means only the first of two
+  // racing end requests wins. The loser gets null and does no side effects, so
+  // logs and stats can't be double-counted.
+  const updated = await Session.findOneAndUpdate(
+    { _id: session._id, userId: req.user._id, status: 'ACTIVE' },
+    {
+      $set: {
+        status:     finalStatus,
+        timerState: {
+          actualDuration:          timerState?.actualDuration          ?? 0,
+          pomodoroRoundsCompleted: timerState?.pomodoroRoundsCompleted ?? 0,
+          breaks:                  timerState?.breaks                  ?? 0,
+        },
+        focusScore,
+        endedAt: endTime,
+      },
+    },
+    { new: true },
+  );
+  if (!updated) return res.status(409).json({ message: 'Session already ended' });
 
-    // Log SESSION_ENDED
+  // Log NFC_VERIFIED before SESSION_ENDED so the event order is chronological.
+  if (nfcTagUid) {
     await FocusLog.create({
-      sessionId: session._id,
+      sessionId: updated._id,
       userId:    req.user._id,
-      event:     'SESSION_ENDED',
+      event:     'NFC_VERIFIED',
       timestamp: endTime,
-      metadata:  { reason: finalStatus },
+      metadata:  { uid: nfcTagUid },
     });
-
-    // Rebuild statistics for the day
-    const streakData = await syncStats(req.user._id, session.dateStr);
-
-     invalidateSuggestion(req.user._id);
-
-    res.json({
-      session: Session.toFrontendRecord(session),
-      streak:  streakData.streak,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
   }
-});
+
+  await FocusLog.create({
+    sessionId: updated._id,
+    userId:    req.user._id,
+    event:     'SESSION_ENDED',
+    timestamp: endTime,
+    metadata:  { reason: finalStatus },
+  });
+
+  const tz         = req.user.settings?.timezone || 'UTC';
+  const streakData = await syncStats(req.user._id, updated.dateStr, tz);
+
+  invalidateSuggestion(req.user._id);
+
+  res.json({
+    session: Session.toFrontendRecord(updated),
+    streak:  streakData.streak,
+  });
+}));
 
 // ─── POST /api/sessions/:id/log ───────────────────────────────────────────────
-// Append a focus event during an active session.
-// Called by the native foreground service when an app block occurs, etc.
-// Body: { event, metadata? }
-router.post('/:id/log', async (req, res) => {
-  if (!assertObjectId(req.params.id, res)) return;
-  try {
-    const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
-    if (!session) return res.status(404).json({ message: 'Session not found' });
+// Append a focus event during an active session. Body: { event, metadata? }
+router.post('/:id/log', asyncHandler(async (req, res) => {
+  requireObjectId(req.params.id);
 
-    const { event, metadata } = req.body;
-    const log = await FocusLog.create({
-      sessionId: session._id,
-      userId:    req.user._id,
-      event,
-      timestamp: new Date(),
-      metadata:  metadata || {},
-    });
+  const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
+  if (!session) return res.status(404).json({ message: 'Session not found' });
 
-    res.status(201).json(log);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  const { event, metadata } = req.body;
+  const log = await FocusLog.create({
+    sessionId: session._id,
+    userId:    req.user._id,
+    event,
+    timestamp: new Date(),
+    metadata:  metadata || {},
+  });
+
+  res.status(201).json(log);
+}));
 
 // ─── GET /api/sessions/:id/logs ──────────────────────────────────────────────
-// All focus log events for a specific session.
-router.get('/:id/logs', async (req, res) => {
-  if (!assertObjectId(req.params.id, res)) return;
-  try {
-    const logs = await FocusLog
-      .find({ sessionId: req.params.id, userId: req.user._id })
-      .sort({ timestamp: 1 });
-    res.json(logs);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+router.get('/:id/logs', asyncHandler(async (req, res) => {
+  requireObjectId(req.params.id);
+
+  const logs = await FocusLog
+    .find({ sessionId: req.params.id, userId: req.user._id })
+    .sort({ timestamp: 1 });
+  res.json(logs);
+}));
 
 // ─── DELETE /api/sessions/:id ─────────────────────────────────────────────────
-// Matches nav.deleteSession(id) — also cleans up focus logs.
-router.delete('/:id', async (req, res) => {
-  if (!assertObjectId(req.params.id, res)) return;
-  try {
-    const session = await Session.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-    if (!session) return res.status(404).json({ message: 'Session not found' });
+router.delete('/:id', asyncHandler(async (req, res) => {
+  requireObjectId(req.params.id);
 
-    await FocusLog.deleteMany({ sessionId: session._id });
-    await syncStats(req.user._id, session.dateStr);
+  const session = await Session.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+  if (!session) return res.status(404).json({ message: 'Session not found' });
 
-    invalidateSuggestion(req.user._id);
+  await FocusLog.deleteMany({ sessionId: session._id });
+  const tz = req.user.settings?.timezone || 'UTC';
+  await syncStats(req.user._id, session.dateStr, tz);
 
-    res.json({ deleted: true });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  invalidateSuggestion(req.user._id);
+
+  res.json({ deleted: true });
+}));
 
 export default router;

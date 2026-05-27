@@ -3,30 +3,28 @@ import Session   from '../models/Session.js';
 import Statistics from '../models/Statistics.js';
 import AIInsight  from '../models/AIInsight.js';
 import auth      from '../middleware/auth.js';
+import asyncHandler from '../middleware/asyncHandler.js';
+import { toUserDate, userTodayStr, shiftDateStr, diffDays, weekdayOfDateStr } from '../utils/datetime.js';
 
 const router     = express.Router();
 
 router.use(auth);
 
-function daysAgo(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// YYYY-MM-DD for n days ago, anchored to the user's timezone "today".
+function daysAgo(n, tz) {
+  return shiftDateStr(userTodayStr(tz), -n);
 }
 
 // ─── GET /api/analytics/summary?period=day|week|month ─────────────────────────
 // Primary endpoint for AnalyticsScreen filter cards and Dashboard stats.
 // Reads from both the Statistics documents and live Session data.
-router.get('/summary', async (req, res) => {
-  try {
+router.get('/summary', asyncHandler(async (req, res) => {
+    const tz     = req.user.settings?.timezone || 'UTC';
     const period = req.query.period || 'week';
     const days   = period === 'day' ? 1 : period === 'week' ? 7 : 30;
 
-    const startStr = daysAgo(days - 1);
-    const endStr   = daysAgo(0);
+    const startStr = daysAgo(days - 1, tz);
+    const endStr   = daysAgo(0, tz);
 
     // Pull sessions directly for bar chart data + fine-grained stats
     const sessions = await Session.find({
@@ -50,11 +48,11 @@ router.get('/summary', async (req, res) => {
         )
       : 0;
 
-    // Best productive hour
+    // Best productive hour (in the user's timezone)
     const hCounts = {};
     for (const s of completed) {
       if (s.startedAt) {
-        const h = s.startedAt.getHours();
+        const h = toUserDate(s.startedAt, tz).hour;
         hCounts[h] = (hCounts[h] || 0) + 1;
       }
     }
@@ -78,30 +76,29 @@ router.get('/summary', async (req, res) => {
     let barData;
     if (period === 'day') {
       const labels = ['12a','4a','8a','12p','4p','8p'];
-      const today  = daysAgo(0);
+      const today  = daysAgo(0, tz);
       barData = labels.map((label, i) => {
         const startH = i * 4;
         const mins   = sessions
           .filter(s => s.dateStr === today && s.startedAt)
-          .filter(s => { const h = s.startedAt.getHours(); return h >= startH && h < startH + 4; })
+          .filter(s => { const h = toUserDate(s.startedAt, tz).hour; return h >= startH && h < startH + 4; })
           .reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
         return { label, minutes: mins };
       });
     } else if (period === 'week') {
       barData = Array.from({ length: 7 }, (_, i) => {
-        const ds  = daysAgo(6 - i);
-        const dow = new Date(ds + 'T12:00:00').getDay();
+        const ds  = daysAgo(6 - i, tz);
+        const dow = weekdayOfDateStr(ds);
         const mins = sessions.filter(s => s.dateStr === ds)
           .reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
         return { label: DAY[dow], minutes: mins };
       });
     } else {
+      const today = daysAgo(0, tz);
       barData = Array.from({ length: 4 }, (_, i) => {
         const hi = (3 - i) * 7, lo = hi + 7;
         const mins = sessions.filter(s => {
-          const dAgo = Math.floor(
-            (Date.now() - new Date(s.dateStr + 'T12:00:00').getTime()) / 86_400_000,
-          );
+          const dAgo = diffDays(s.dateStr, today);
           return dAgo >= hi && dAgo < lo;
         }).reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
         return { label: `W${i + 1}`, minutes: mins };
@@ -126,39 +123,29 @@ router.get('/summary', async (req, res) => {
       longestStreak:     todayStat?.longestStreak  ?? 0,
       barData,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+}));
 
 // ─── GET /api/analytics/statistics?from=YYYY-MM-DD&to=YYYY-MM-DD ─────────────
 // Raw daily statistics documents — consumed by ML service for training data.
-router.get('/statistics', async (req, res) => {
-  try {
-    const from = req.query.from || daysAgo(30);
-    const to   = req.query.to   || daysAgo(0);
+router.get('/statistics', asyncHandler(async (req, res) => {
+  const tz   = req.user.settings?.timezone || 'UTC';
+  const from = req.query.from || daysAgo(30, tz);
+  const to   = req.query.to   || daysAgo(0, tz);
 
-    const stats = await Statistics.find({
-      userId:  req.user._id,
-      dateStr: { $gte: from, $lte: to },
-    }).sort({ dateStr: 1 });
+  const stats = await Statistics.find({
+    userId:  req.user._id,
+    dateStr: { $gte: from, $lte: to },
+  }).sort({ dateStr: 1 });
 
-    res.json(stats);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+  res.json(stats);
+}));
 
 // ─── GET /api/analytics/ai-insight ───────────────────────────────────────────
-router.get('/ai-insight', async (req, res) => {
-  try {
-    const insight = await AIInsight.findOne({ userId: req.user._id });
-    if (!insight) return res.status(204).send();
-    res.json(insight);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+router.get('/ai-insight', asyncHandler(async (req, res) => {
+  const insight = await AIInsight.findOne({ userId: req.user._id });
+  if (!insight) return res.status(204).send();
+  res.json(insight);
+}));
 
 // NOTE: PUT /api/analytics/ai-insight was removed. Insight generation is now
 // owned server-side by /api/ai/insights (see routes/ai.js); no external writer.

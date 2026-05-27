@@ -11,6 +11,7 @@ import './models/FocusLog.js';
 import './models/Statistics.js';
 import './models/AIInsight.js';
 import './models/RefreshToken.js';
+import { connectDB, disconnectDB } from './config/db.js';
 import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
@@ -49,14 +50,38 @@ app.use('/api/sessions',  sessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ai',        aiRoutes);
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
+// Liveness + readiness: 503 unless the Mongo connection is actually up.
+app.get('/api/health', (_req, res) => {
+  const dbUp = mongoose.connection.readyState === 1;
+  res.status(dbUp ? 200 : 503).json({
+    status: dbUp ? 'ok' : 'degraded',
+    db:     dbUp ? 'connected' : 'disconnected',
+    ts:     new Date(),
+  });
+});
 
 app.use(errorHandler);
 
-mongoose.connect(process.env.MONGO_URI)
+connectDB()
   .then(() => {
-    console.log('MongoDB connected');
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+    // Graceful shutdown: stop accepting connections, drain in-flight requests,
+    // close Mongo, then exit. Force-exit if draining stalls.
+    const shutdown = (signal) => {
+      console.log(`${signal} received — shutting down gracefully`);
+      server.close(async () => {
+        await disconnectDB();
+        process.exit(0);
+      });
+      setTimeout(() => {
+        console.error('Could not close connections in time — forcing exit');
+        process.exit(1);
+      }, 10_000).unref();
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
   })
   .catch(err => {
     console.error('MongoDB connection error:', err.message);

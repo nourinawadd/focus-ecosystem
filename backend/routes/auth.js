@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import RefreshToken from '../models/RefreshToken.js';
+import asyncHandler from '../middleware/asyncHandler.js';
 import { signAccess, signRefresh, hashToken } from '../utils/jwt.js';
 
 const router = express.Router();
@@ -55,7 +56,7 @@ const registerLimiter = rateLimit({
 });
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
-router.post('/register', registerLimiter, async (req, res) => {
+router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
   const name     = (req.body.name  ?? '').trim();
   const email    = (req.body.email ?? '').trim().toLowerCase();
   const password = req.body.password ?? '';
@@ -72,10 +73,10 @@ router.post('/register', registerLimiter, async (req, res) => {
 
   const user = await User.create({ name, email, passwordHash: password });
   res.status(201).json(await issueTokens(user, req));
-});
+}));
 
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const email    = (req.body.email ?? '').trim().toLowerCase();
   const password = req.body.password ?? '';
 
@@ -95,13 +96,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(401).json({ message: 'Invalid credentials' });
 
   res.json(await issueTokens(user, req));
-});
+}));
 
 // ─── POST /api/auth/refresh ───────────────────────────────────────────────────
 // Exchange a valid refresh token for a new pair (rotation). The presented token
 // is revoked and linked to its successor. Replaying an already-revoked token is
 // treated as theft: the user's entire live token set is burned.
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', asyncHandler(async (req, res) => {
   const refreshToken = req.body.refreshToken ?? '';
   if (!refreshToken)
     return res.status(400).json({ message: 'refreshToken is required' });
@@ -134,12 +135,12 @@ router.post('/refresh', async (req, res) => {
   await stored.save();
 
   res.json(pair);
-});
+}));
 
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
 // Revoke the supplied refresh token. Idempotent — unknown/expired tokens are a
 // no-op so logout never leaks whether a token was valid.
-router.post('/logout', async (req, res) => {
+router.post('/logout', asyncHandler(async (req, res) => {
   const refreshToken = req.body.refreshToken ?? '';
   if (refreshToken) {
     await RefreshToken.findOneAndUpdate(
@@ -148,6 +149,6 @@ router.post('/logout', async (req, res) => {
     );
   }
   res.json({ success: true });
-});
+}));
 
 export default router;
