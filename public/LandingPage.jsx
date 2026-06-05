@@ -619,7 +619,7 @@ function NavBar() {
   return (
     <nav>
       <div className="nav-container">
-        <div className="logo">⚓ Anchor</div>
+        <div className="logo">ANCHOR</div>
         <ul className="nav-links">
           <li><a href="#features">Features</a></li>
           <li><a href="#how-it-works">How It Works</a></li>
@@ -799,9 +799,9 @@ function DemoSection() {
           <div style={{ marginBottom: spacing.lg }}>
             <strong>Session Type</strong><br />
             <select style={{ width: '100%', padding: spacing.sm, marginTop: spacing.sm, background: 'rgba(198, 241, 53, 0.1)', border: `1px solid ${colors.lime}`, borderRadius: radii.md, color: colors.white }}>
-              <option>📚 Study</option>
-              <option>💼 Work</option>
-              <option>📝 Custom</option>
+              <option>Study</option>
+              <option>Work</option>
+              <option>Custom</option>
             </select>
           </div>
           <div style={{ marginBottom: spacing.lg }}>
