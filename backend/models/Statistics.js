@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { toUserDate } from '../utils/datetime.js';
 
 const StatisticsSchema = new mongoose.Schema({
   userId: {
@@ -26,7 +27,10 @@ const StatisticsSchema = new mongoose.Schema({
 StatisticsSchema.index({ userId: 1, dateStr: 1 }, { unique: true });
 StatisticsSchema.index({ userId: 1, date: -1 });
 
-StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, options = {}) {
+// Rebuild the day's aggregate metrics from raw Session/FocusLog data.
+// Streak fields are owned by the caller (sessions.syncStats) and written
+// separately, so they are intentionally not touched here.
+StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, tz = 'UTC') {
   const Session  = mongoose.model('Session');
   const FocusLog = mongoose.model('FocusLog');
 
@@ -41,7 +45,7 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, option
   const hourCounts = {};
   for (const s of completed) {
     if (s.startedAt) {
-      const h = s.startedAt.getHours();
+      const h = toUserDate(s.startedAt, tz).hour;
       hourCounts[h] = (hourCounts[h] || 0) + 1;
     }
   }
@@ -63,8 +67,6 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, option
     ? Object.entries(pkgCounts).sort((a, b) => Number(b[1]) - Number(a[1]))[0][0]
     : null;
 
-  const streak = options.streak ?? 0;
-
   const scored = completed.filter(s => s.focusScore !== null);
   const dailyFocusScore = scored.length > 0
     ? Math.round(scored.reduce((a, s) => a + (s.focusScore || 0), 0) / scored.length)
@@ -72,7 +74,7 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, option
 
   const date = new Date(dateStr + 'T00:00:00.000Z');
 
-  await this.findOneAndUpdate(
+  return this.findOneAndUpdate(
     { userId, dateStr },
     {
       $set: {
@@ -80,15 +82,20 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, option
         totalFocusMinutes: totalMins,
         sessionsCompleted: completed.length,
         sessionsAbandoned: abandoned.length,
-        currentStreak:     streak,
-        longestStreak:     options.longestStreak ?? streak,
         mostProductiveHour,
         topBlockedApp,
         dailyFocusScore,
-        weeklyFocusScore:  options.weeklyFocusScore ?? 0,
       },
     },
     { upsert: true, new: true },
+  );
+};
+
+// Persist the streak figures computed by sessions.syncStats onto a day's doc.
+StatisticsSchema.statics.setStreak = function (userId, dateStr, currentStreak, longestStreak) {
+  return this.updateOne(
+    { userId, dateStr },
+    { $set: { currentStreak, longestStreak } },
   );
 };
 

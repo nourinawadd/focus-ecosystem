@@ -19,6 +19,10 @@ const SettingsSchema = new mongoose.Schema({
   weeklyGoalMinutes: { type: Number, default: 600 },
 
   notificationsEnabled: { type: Boolean, default: true },
+
+  // IANA timezone (e.g. "Europe/Istanbul"). Drives all server-side
+  // hour-of-day / "today" calculations. Defaults to UTC.
+  timezone: { type: String, default: 'UTC' },
 }, { _id: false });
 
 const UserSchema = new mongoose.Schema({
