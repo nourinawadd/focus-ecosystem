@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Anchor",
+    "slug": "anchor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -13,18 +13,53 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "dev.gradproject.anchor",
+      "infoPlist": {
+        "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
+        "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions."
+      },
+      "buildNumber": "27",
+      "entitlements": {
+        "com.apple.developer.family-controls": true
+      }
     },
     "android": {
+      "package": "dev.gradproject.anchor",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.NFC"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ],
+      [
+        "react-native-nfc-manager",
+        {
+          "nfcPermission": "Anchor uses NFC to verify your physical presence at your focus location during sessions."
+        }
+      ]
+    ],
+    "owner": "munaaldhshan",
+    "extra": {
+      "eas": {
+        "projectId": "9852f4f5-eada-487e-9f44-800a3adab259"
+      }
     }
   }
 }

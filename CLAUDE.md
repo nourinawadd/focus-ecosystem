@@ -66,6 +66,7 @@ pomoBon = timerMode === 'POMODORO' ? 8 : 0
 penalty = min(24, distractionCount * 4)
 score = min(99, max(20, round(ratio * 80) + pomoBon - penalty + 12))
 ```
+`actualMins` comes from the request's `timerState.actualDuration`; `distractionCount` is counted from `FocusLog` (`APP_BLOCKED` events for the session). Any `focusScore` or `distractionCount` sent by the client is ignored — the score is always recomputed from authoritative sources.
 
 **Date handling**: All session/stats documents use `dateStr: YYYY-MM-DD` in local time (no UTC conversion). Frontend helpers: `toDateStr()`, `daysAgo()`, `fmtHHMM()` in `frontend/store/sessions.ts`.
 
@@ -82,3 +83,7 @@ JWT_SECRET=
 JWT_EXPIRES_IN=7d   # optional, defaults to 7d
 PORT=5000           # optional, defaults to 5000
 ```
+
+## Workflow
+
+After making any code/config changes, always end the response with **one** suggested commit message covering all changed files in a single commit (conventional-commits format with scope, e.g. `fix(ios): ...`, `feat(backend): ...`). Do not propose splitting into multiple commits — the user prefers a single combined commit.

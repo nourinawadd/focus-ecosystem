@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Animated } from 'react-native';
 import { NavProps } from '../App';
-import { ColorPalette, fontSize, spacing, radii } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
+import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { apiFetch } from '../api/client';
 
 type FilterType = 'Day' | 'Week' | 'Month';
@@ -43,8 +42,6 @@ function fmtHour(h: number | null): string {
 function BarChart({ data, maxMins, progress }: {
   data: BarItem[]; maxMins: number; progress: Animated.Value;
 }) {
-  const { colors } = useTheme();
-  const bc = useMemo(() => makeBc(colors), [colors]);
   return (
     <View style={bc.wrap}>
       {data.map((item, i) => {
@@ -64,8 +61,6 @@ function BarChart({ data, maxMins, progress }: {
 }
 
 export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const s = useMemo(() => makeS(colors), [colors]);
   const initial = nav.user.name.charAt(0).toUpperCase();
 
   const [filter,  setFilter]  = useState<FilterType>('Week');
@@ -208,16 +203,16 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const makeBc = (c: ColorPalette) => StyleSheet.create({
+const bc = StyleSheet.create({
   wrap:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: MAX_BAR_H + 28, marginTop: spacing.lg },
   col:   { alignItems: 'center', flex: 1 },
-  track: { width: 18, height: MAX_BAR_H, justifyContent: 'flex-end', backgroundColor: c.border, borderRadius: 6, overflow: 'hidden' },
-  bar:   { width: 18, backgroundColor: c.ink, borderRadius: 6 },
-  lbl:   { fontSize: 10, color: c.muted, marginTop: 6, fontWeight: '600' },
+  track: { width: 18, height: MAX_BAR_H, justifyContent: 'flex-end', backgroundColor: colors.border, borderRadius: 6, overflow: 'hidden' },
+  bar:   { width: 18, backgroundColor: colors.ink, borderRadius: 6 },
+  lbl:   { fontSize: 10, color: colors.muted, marginTop: 6, fontWeight: '600' },
 });
 
-const makeS = (c: ColorPalette) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.bg },
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -226,47 +221,47 @@ const makeS = (c: ColorPalette) => StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   menuBtn:    { width: 40, height: 40, justifyContent: 'center' },
-  menuLine:   { width: 22, height: 2.5, backgroundColor: c.ink, borderRadius: 2, marginBottom: 5 },
-  title:      { fontSize: fontSize.xl, fontWeight: '700', color: c.ink },
-  avatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: c.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: c.bg, fontWeight: '700', fontSize: fontSize.md },
+  menuLine:   { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
+  title:      { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
+  avatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.md },
 
   filterWrap: {
     flexDirection: 'row', marginHorizontal: spacing.xl, marginBottom: spacing.md,
-    backgroundColor: c.border, borderRadius: radii.full, padding: 3,
+    backgroundColor: colors.border, borderRadius: radii.full, padding: 3,
   },
   filterBtn:    { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: radii.full },
-  filterBtnOn:  { backgroundColor: c.ink },
-  filterTxt:    { fontSize: fontSize.sm, fontWeight: '600', color: c.muted },
-  filterTxtOn:  { color: c.bg },
+  filterBtnOn:  { backgroundColor: colors.ink },
+  filterTxt:    { fontSize: fontSize.sm, fontWeight: '600', color: colors.muted },
+  filterTxtOn:  { color: colors.white },
 
   container: { paddingHorizontal: spacing.xl, paddingTop: spacing.xs },
 
   card: {
-    backgroundColor: c.card, borderRadius: radii.xl,
+    backgroundColor: colors.card, borderRadius: radii.xl,
     padding: spacing.xl, marginBottom: spacing.md,
-    shadowColor: c.black, shadowOffset: { width: 0, height: 2 },
+    shadowColor: colors.black, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
   cardTop:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardLabel:  { fontSize: fontSize.xs, fontWeight: '700', color: c.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: spacing.xs },
-  bigNum:     { fontSize: 30, fontWeight: '800', color: c.ink, marginBottom: 2 },
-  emptyVal:   { fontSize: fontSize.lg, color: c.mutedLight, fontWeight: '600', marginBottom: 2 },
-  emptyMsg:   { fontSize: fontSize.sm, color: c.mutedLight, marginTop: spacing.sm, lineHeight: 20 },
-  sub:        { fontSize: fontSize.xs, color: c.muted },
+  cardLabel:  { fontSize: fontSize.xs, fontWeight: '700', color: colors.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: spacing.xs },
+  bigNum:     { fontSize: 30, fontWeight: '800', color: colors.ink, marginBottom: 2 },
+  emptyVal:   { fontSize: fontSize.lg, color: colors.mutedLight, fontWeight: '600', marginBottom: 2 },
+  emptyMsg:   { fontSize: fontSize.sm, color: colors.mutedLight, marginTop: spacing.sm, lineHeight: 20 },
+  sub:        { fontSize: fontSize.xs, color: colors.muted },
 
-  totalBadge:    { backgroundColor: c.border, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
-  totalBadgeTxt: { fontSize: fontSize.xs, fontWeight: '600', color: c.inkSoft },
+  totalBadge:    { backgroundColor: colors.border, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
+  totalBadgeTxt: { fontSize: fontSize.xs, fontWeight: '600', color: colors.inkSoft },
 
   row:  { flexDirection: 'row', gap: spacing.md },
   half: { flex: 1, marginBottom: spacing.md },
 
   healthRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: spacing.md },
-  healthNum: { fontSize: 48, fontWeight: '800', color: c.ink, lineHeight: 52 },
-  healthMax: { fontSize: fontSize.xl, color: c.muted, paddingBottom: 7, marginLeft: 4 },
-  track:     { height: 8, backgroundColor: c.border, borderRadius: 4, overflow: 'hidden', marginBottom: spacing.lg },
-  fill:      { height: 8, backgroundColor: c.ink, borderRadius: 4 },
+  healthNum: { fontSize: 48, fontWeight: '800', color: colors.ink, lineHeight: 52 },
+  healthMax: { fontSize: fontSize.xl, color: colors.muted, paddingBottom: 7, marginLeft: 4 },
+  track:     { height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: spacing.lg },
+  fill:      { height: 8, backgroundColor: colors.ink, borderRadius: 4 },
 
   breakRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  breakItem: { fontSize: fontSize.xs, color: c.muted, fontWeight: '500' },
+  breakItem: { fontSize: fontSize.xs, color: colors.muted, fontWeight: '500' },
 });

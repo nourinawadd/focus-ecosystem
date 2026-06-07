@@ -1,0 +1,24 @@
+* text=auto eol=lf
+
+*.sh         text eol=lf
+*.bash       text eol=lf
+.xcode.env   text eol=lf
+.xcode.env.* text eol=lf
+Podfile      text eol=lf
+Gemfile      text eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.pdf  binary
+*.zip  binary
+*.tgz  binary
+*.tar  binary
+*.gz   binary
+*.p8   binary
+*.p12  binary
+*.jks  binary
+*.mobileprovision binary

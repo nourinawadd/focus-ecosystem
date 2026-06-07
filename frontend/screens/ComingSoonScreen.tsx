@@ -1,9 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, ScreenName } from '../App';
-import { ColorPalette } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
 
 const SCREEN_LABELS: Record<string, string> = {
   CreateSession: 'Create Session',
@@ -24,8 +22,6 @@ const SCREEN_ICONS: Record<string, IoniconsName> = {
 };
 
 export default function ComingSoonScreen({ nav, screen }: { nav: NavProps; screen: ScreenName }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const label = SCREEN_LABELS[screen] ?? screen;
   const icon  = SCREEN_ICONS[screen] ?? 'construct-outline';
 
@@ -44,7 +40,7 @@ export default function ComingSoonScreen({ nav, screen }: { nav: NavProps; scree
 
       {/* Coming soon content */}
       <View style={styles.body}>
-        <Ionicons name={icon} size={56} color={colors.ink} style={styles.iconWrap} />
+        <Ionicons name={icon} size={56} color="#111" style={styles.iconWrap} />
         <Text style={styles.heading}>{label}</Text>
         <Text style={styles.subtext}>This feature is coming soon.{'\n'}We're working hard to build it for you.</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => nav.navigate('Dashboard')}>
@@ -55,27 +51,27 @@ export default function ComingSoonScreen({ nav, screen }: { nav: NavProps; scree
   );
 }
 
-const makeStyles = (c: ColorPalette) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.bg },
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
     paddingBottom: 16,
-    backgroundColor: c.bg,
+    backgroundColor: '#f5f5f5',
   },
   menuBtn: { width: 40, height: 40, justifyContent: 'center' },
-  menuLine: { width: 22, height: 2.5, backgroundColor: c.ink, borderRadius: 2, marginBottom: 5 },
-  title: { fontSize: 20, fontWeight: '700', color: c.ink },
+  menuLine: { width: 22, height: 2.5, backgroundColor: '#111', borderRadius: 2, marginBottom: 5 },
+  title: { fontSize: 20, fontWeight: '700', color: '#111' },
   headerSpacer: { width: 40 },
   body: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   iconWrap: { marginBottom: 20 },
-  heading: { fontSize: 24, fontWeight: '700', color: c.ink, marginBottom: 12, textAlign: 'center' },
-  subtext: { fontSize: 15, color: c.muted, textAlign: 'center', lineHeight: 22, marginBottom: 36 },
+  heading: { fontSize: 24, fontWeight: '700', color: '#111', marginBottom: 12, textAlign: 'center' },
+  subtext: { fontSize: 15, color: '#888', textAlign: 'center', lineHeight: 22, marginBottom: 36 },
   backBtn: {
-    backgroundColor: c.ink, borderRadius: 14,
+    backgroundColor: '#111', borderRadius: 14,
     paddingVertical: 14, paddingHorizontal: 32,
   },
-  backBtnText: { color: c.bg, fontSize: 15, fontWeight: '600' },
+  backBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

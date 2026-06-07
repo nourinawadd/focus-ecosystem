@@ -1,13 +1,9 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import { NavProps } from '../App';
-import { ColorPalette } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
 import { computeFocusHours, computeLongestStreak } from '../store/sessions';
 
 export default function ProfileScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user, sessions } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
@@ -89,39 +85,39 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const makeStyles = (c: ColorPalette) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: c.bg },
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f5f5f5' },
   container: { padding: 20, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   menuBtn: { width: 40, height: 40, justifyContent: 'center' },
-  menuLine: { width: 22, height: 2.5, backgroundColor: c.ink, borderRadius: 2, marginBottom: 5 },
-  title: { fontSize: 20, fontWeight: '700', color: c.ink },
+  menuLine: { width: 22, height: 2.5, backgroundColor: '#111', borderRadius: 2, marginBottom: 5 },
+  title: { fontSize: 20, fontWeight: '700', color: '#111' },
   headerSpacer: { width: 40 },
   avatarSection: { alignItems: 'center', marginBottom: 30 },
   avatar: {
     width: 82, height: 82, borderRadius: 41,
-    backgroundColor: c.ink, justifyContent: 'center',
+    backgroundColor: '#111', justifyContent: 'center',
     alignItems: 'center', marginBottom: 14,
   },
-  avatarText: { color: c.bg, fontSize: 32, fontWeight: '700' },
-  name: { fontSize: 22, fontWeight: '700', color: c.ink, marginBottom: 4 },
-  email: { fontSize: 14, color: c.muted },
+  avatarText: { color: '#fff', fontSize: 32, fontWeight: '700' },
+  name: { fontSize: 22, fontWeight: '700', color: '#111', marginBottom: 4 },
+  email: { fontSize: 14, color: '#888' },
   sectionLabel: {
-    fontSize: 11, fontWeight: '600', color: c.muted,
+    fontSize: 11, fontWeight: '600', color: '#888',
     letterSpacing: 1.2, marginBottom: 10, marginTop: 4,
   },
-  card: { backgroundColor: c.card, borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
+  card: { backgroundColor: '#fff', borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  rowDivider: { height: 1, backgroundColor: c.border, marginHorizontal: 16 },
-  infoLabel: { fontSize: 14, color: c.muted, fontWeight: '500' },
-  infoValue: { fontSize: 14, color: c.ink, fontWeight: '600' },
+  rowDivider: { height: 1, backgroundColor: '#f0f0f0', marginHorizontal: 16 },
+  infoLabel: { fontSize: 14, color: '#888', fontWeight: '500' },
+  infoValue: { fontSize: 14, color: '#111', fontWeight: '600' },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  statCard: { flex: 1, backgroundColor: c.card, borderRadius: 14, padding: 16, alignItems: 'center' },
-  statValue: { fontSize: 22, fontWeight: 'bold', color: c.ink, marginBottom: 2 },
-  statLabel: { fontSize: 11, color: c.muted, textAlign: 'center' },
+  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 16, alignItems: 'center' },
+  statValue: { fontSize: 22, fontWeight: 'bold', color: '#111', marginBottom: 2 },
+  statLabel: { fontSize: 11, color: '#888', textAlign: 'center' },
   logoutBtn: {
     borderRadius: 14, paddingVertical: 16, alignItems: 'center',
-    borderWidth: 1.5, borderColor: c.danger, backgroundColor: c.card,
+    borderWidth: 1.5, borderColor: '#e53935', backgroundColor: '#fff',
   },
-  logoutText: { color: c.danger, fontSize: 16, fontWeight: '600' },
+  logoutText: { color: '#e53935', fontSize: 16, fontWeight: '600' },
 });

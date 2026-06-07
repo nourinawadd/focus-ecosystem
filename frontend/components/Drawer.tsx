@@ -4,7 +4,6 @@ import {
   StyleSheet, Dimensions, Platform, Pressable,
 } from 'react-native';
 import { ScreenName, NavProps } from '../App';
-import { useTheme } from '../context/ThemeContext';
 
 const W = Dimensions.get('window').width * 0.80;
 
@@ -27,7 +26,6 @@ const NAV_ITEMS: { label: string; screen: ScreenName }[] = [
 ];
 
 export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut }: Props) {
-  const { colors, dark } = useTheme();
   const [visible, setVisible] = useState(false);
   const translateX = useRef(new Animated.Value(-W)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -61,20 +59,20 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
       </Animated.View>
 
       {/* Drawer panel */}
-      <Animated.View style={[styles.drawer, { backgroundColor: dark ? '#111' : '#fff', transform: [{ translateX }] }]}>
+      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
 
         {/* User info — horizontal row */}
         <View style={styles.userRow}>
-          <View style={[styles.avatar, { backgroundColor: colors.ink }]}>
-            <Text style={[styles.avatarText, { color: colors.bg }]}>{initial}</Text>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: colors.ink }]}>{name}</Text>
-            {email ? <Text style={[styles.userEmail, { color: colors.muted }]}>{email}</Text> : null}
+            <Text style={styles.userName}>{name}</Text>
+            {email ? <Text style={styles.userEmail}>{email}</Text> : null}
           </View>
         </View>
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <View style={styles.divider} />
 
         {/* Nav links — no icons, plain text */}
         <View style={styles.navList}>
@@ -83,11 +81,11 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
             return (
               <TouchableOpacity
                 key={item.screen}
-                style={[styles.navItem, active && { backgroundColor: colors.ink }]}
+                style={[styles.navItem, active && styles.navItemActive]}
                 onPress={() => nav.navigate(item.screen)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.navLabel, { color: active ? colors.bg : colors.muted }]}>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -96,7 +94,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
         </View>
 
         {/* Sign out — fixed at bottom, plain text */}
-        <TouchableOpacity style={[styles.signOut, { borderTopColor: colors.border }]} onPress={onSignOut}>
+        <TouchableOpacity style={styles.signOut} onPress={onSignOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 

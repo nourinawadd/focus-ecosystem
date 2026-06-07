@@ -4,8 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps, SessionRecord } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
-import { ColorPalette, fontSize, spacing, radii } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
+import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { toDateStr, daysAgo, computeStreak, computeFocusHours } from '../store/sessions';
 import { apiFetch } from '../api/client';
 
@@ -54,8 +53,6 @@ function getWeekDays(anchor: Date): Date[] {
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 function WeekStrip({ sessions }: { sessions: SessionRecord[] }) {
-  const { colors } = useTheme();
-  const ws = useMemo(() => makeWs(colors), [colors]);
   const todayStr = toDateStr(new Date());
   const weekDays = getWeekDays(new Date());
   const activeDays = useMemo(
@@ -85,8 +82,6 @@ function WeekStrip({ sessions }: { sessions: SessionRecord[] }) {
 
 // ─── Session card ─────────────────────────────────────────────────────────────
 function SessionItem({ s, onDelete }: { s: SessionRecord; onDelete: () => void }) {
-  const { colors } = useTheme();
-  const sc = useMemo(() => makeSc(colors), [colors]);
   const confirmDelete = () =>
     Alert.alert('Delete Session', 'Remove this session from history?', [
       { text: 'Cancel', style: 'cancel' },
@@ -117,8 +112,6 @@ function SessionItem({ s, onDelete }: { s: SessionRecord; onDelete: () => void }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyGroup() {
-  const { colors } = useTheme();
-  const sc = useMemo(() => makeSc(colors), [colors]);
   return (
     <View style={sc.empty}>
       <Ionicons name="calendar-outline" size={22} color={colors.mutedLight} />
@@ -129,8 +122,6 @@ function EmptyGroup() {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HistoryScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const main = useMemo(() => makeMain(colors), [colors]);
   const { sessions } = nav;
   const [histFilter, setHistFilter] = useState<HistoryFilter>('Today');
 
@@ -233,57 +224,57 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 /** Week strip */
-const makeWs = (c: ColorPalette) => StyleSheet.create({
+const ws = StyleSheet.create({
   row:          { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg },
   col:          { alignItems: 'center', gap: spacing.xxs + 1 },
-  circle:       { width: 36, height: 36, borderRadius: 18, backgroundColor: c.border, alignItems: 'center', justifyContent: 'center' },
-  circleActive: { backgroundColor: c.ink },
-  circleToday:  { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.ink },
-  letter:       { fontSize: fontSize.sm - 1, fontWeight: '600', color: c.muted },
-  letterActive: { color: c.bg },
-  letterToday:  { color: c.ink },
-  todayDot:     { width: 4, height: 4, borderRadius: 2, backgroundColor: c.ink },
+  circle:       { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  circleActive: { backgroundColor: colors.ink },
+  circleToday:  { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.ink },
+  letter:       { fontSize: fontSize.sm - 1, fontWeight: '600', color: colors.muted },
+  letterActive: { color: colors.white },
+  letterToday:  { color: colors.ink },
+  todayDot:     { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.ink },
 });
 
 /** Session item */
-const makeSc = (c: ColorPalette) => StyleSheet.create({
+const sc = StyleSheet.create({
   card:            { marginBottom: spacing.sm + 2 },
   row:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   left:            { flex: 1, marginRight: spacing.sm },
-  title:           { fontSize: fontSize.md, fontWeight: '600', color: c.ink, marginBottom: 3 },
-  sub:             { fontSize: fontSize.xs + 1, color: c.muted },
+  title:           { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginBottom: 3 },
+  sub:             { fontSize: fontSize.xs + 1, color: colors.muted },
   rightCol:        { alignItems: 'flex-end', gap: spacing.sm },
-  scoreBadge:      { backgroundColor: c.ink, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
-  scoreText:       { color: c.bg, fontSize: fontSize.sm, fontWeight: '700' },
-  incompleteBadge: { borderWidth: 1.5, borderColor: c.border, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
-  incompleteText:  { color: c.mutedLight, fontSize: fontSize.xs, fontWeight: '500' },
+  scoreBadge:      { backgroundColor: colors.ink, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
+  scoreText:       { color: colors.white, fontSize: fontSize.sm, fontWeight: '700' },
+  incompleteBadge: { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.full, paddingVertical: 5, paddingHorizontal: spacing.md },
+  incompleteText:  { color: colors.mutedLight, fontSize: fontSize.xs, fontWeight: '500' },
   deleteBtn:       { padding: 2 },
   empty:           { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl, opacity: 0.6 },
-  emptyText:       { fontSize: fontSize.sm, color: c.mutedLight },
+  emptyText:       { fontSize: fontSize.sm, color: colors.mutedLight },
 });
 
 /** Screen layout */
-const makeMain = (c: ColorPalette) => StyleSheet.create({
-  screen:       { flex: 1, backgroundColor: c.bg },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: spacing.sm, backgroundColor: c.bg },
+const main = StyleSheet.create({
+  screen:       { flex: 1, backgroundColor: colors.bg },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: spacing.sm, backgroundColor: colors.bg },
   backBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle:  { fontSize: fontSize.xl, fontWeight: '700', color: c.ink },
+  headerTitle:  { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   headerSpacer: { width: 40 },
-  filterWrap:   { flexDirection: 'row', marginHorizontal: spacing.xl, marginBottom: spacing.md, backgroundColor: c.border, borderRadius: radii.full, padding: 3 },
+  filterWrap:   { flexDirection: 'row', marginHorizontal: spacing.xl, marginBottom: spacing.md, backgroundColor: colors.border, borderRadius: radii.full, padding: 3 },
   filterBtn:    { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radii.full },
-  filterBtnOn:  { backgroundColor: c.ink },
-  filterTxt:    { fontSize: fontSize.sm, fontWeight: '600', color: c.muted },
-  filterTxtOn:  { color: c.bg },
+  filterBtnOn:  { backgroundColor: colors.ink },
+  filterTxt:    { fontSize: fontSize.sm, fontWeight: '600', color: colors.muted },
+  filterTxtOn:  { color: colors.white },
   container:    { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
 
   weekCard:    { marginBottom: spacing.md },
   weekHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   weekRight:   { justifyContent: 'center', alignItems: 'center' },
-  streakNum:   { fontSize: 40, fontWeight: '800', color: c.ink, lineHeight: 44 },
-  streakLabel: { fontSize: fontSize.xs, fontWeight: '600', color: c.muted, letterSpacing: 0.5, marginTop: 1 },
+  streakNum:   { fontSize: 40, fontWeight: '800', color: colors.ink, lineHeight: 44 },
+  streakLabel: { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 0.5, marginTop: 1 },
 
   statsRow:  { flexDirection: 'row', gap: spacing.sm + 2, marginBottom: spacing.xs },
   statCard:  { flex: 1 },
-  statValue: { fontSize: 22, fontWeight: '700', color: c.ink, marginBottom: 2 },
-  statLabel: { fontSize: fontSize.xs, color: c.muted },
+  statValue: { fontSize: 22, fontWeight: '700', color: colors.ink, marginBottom: 2 },
+  statLabel: { fontSize: fontSize.xs, color: colors.muted },
 });

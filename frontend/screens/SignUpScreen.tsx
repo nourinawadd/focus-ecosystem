@@ -1,21 +1,17 @@
 // frontend/screens/SignUpScreen.tsx
 // Registration screen. Calls POST /auth/register, sets the global token on success.
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
-import { ColorPalette } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
-import { apiFetch } from '../api/client';
+import { apiFetch, setTokens } from '../api/client';
 
 type Errors = { name?: string; email?: string; password?: string; api?: string };
 
 export default function SignUpScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -38,11 +34,14 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
     if (!validate() || loading) return;
     setLoading(true);
     try {
-      const { token, user } = await apiFetch<{ token: string; user: any }>(
+      const { accessToken, refreshToken, user } = await apiFetch<{
+        accessToken: string; refreshToken: string; user: any;
+      }>(
         '/auth/register', null,
         { method: 'POST', body: JSON.stringify({ name: name.trim(), email, password }) },
       );
-      nav.setToken(token);
+      await setTokens({ accessToken, refreshToken });
+      nav.setToken(accessToken);
       nav.updateUser({ name: user.name, email: user.email });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
@@ -109,13 +108,13 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
         <View style={styles.socialRow}>
           <TouchableOpacity style={styles.socialBtn}>
             <View style={styles.socialContent}>
-              <Ionicons name="logo-google" size={17} color={colors.ink} />
+              <Ionicons name="logo-google" size={17} color="#111" />
               <Text style={styles.socialText}>Google</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.socialBtn}>
             <View style={styles.socialContent}>
-              <Ionicons name="logo-apple" size={18} color={colors.ink} />
+              <Ionicons name="logo-apple" size={18} color="#111" />
               <Text style={styles.socialText}>Apple</Text>
             </View>
           </TouchableOpacity>
@@ -132,29 +131,29 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
   );
 }
 
-const makeStyles = (c: ColorPalette) => StyleSheet.create({
-  flex:           { flex: 1, backgroundColor: c.bg },
+const styles = StyleSheet.create({
+  flex:           { flex: 1, backgroundColor: '#fff' },
   container:      { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
   logoRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: c.ink, marginRight: 8 },
-  logoText:       { fontSize: 18, fontWeight: '700', color: c.ink },
-  title:          { fontSize: 28, fontWeight: 'bold', color: c.ink, marginBottom: 6 },
-  subtitle:       { fontSize: 14, color: c.muted, marginBottom: 32 },
-  apiError:       { color: c.danger, fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#fdecea', borderRadius: 8 },
-  label:          { fontSize: 11, fontWeight: '600', color: c.muted, letterSpacing: 1, marginBottom: 6, marginTop: 4 },
-  input:          { borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 14, fontSize: 15, color: c.ink, backgroundColor: c.card, marginBottom: 4 },
-  inputError:     { borderColor: c.danger },
-  error:          { color: c.danger, fontSize: 12, marginBottom: 6 },
-  button:         { backgroundColor: c.ink, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 16, marginBottom: 24 },
+  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#111', marginRight: 8 },
+  logoText:       { fontSize: 18, fontWeight: '700', color: '#111' },
+  title:          { fontSize: 28, fontWeight: 'bold', color: '#111', marginBottom: 6 },
+  subtitle:       { fontSize: 14, color: '#888', marginBottom: 32 },
+  apiError:       { color: '#e53935', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#fdecea', borderRadius: 8 },
+  label:          { fontSize: 11, fontWeight: '600', color: '#888', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
+  input:          { borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 14, fontSize: 15, color: '#111', marginBottom: 4 },
+  inputError:     { borderColor: '#e53935' },
+  error:          { color: '#e53935', fontSize: 12, marginBottom: 6 },
+  button:         { backgroundColor: '#111', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 16, marginBottom: 24 },
   buttonDisabled: { opacity: 0.6 },
-  buttonText:     { color: c.bg, fontSize: 16, fontWeight: '600' },
+  buttonText:     { color: '#fff', fontSize: 16, fontWeight: '600' },
   divider:        { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  dividerLine:    { flex: 1, height: 1, backgroundColor: c.border },
-  dividerText:    { fontSize: 11, color: c.mutedLight, marginHorizontal: 10, letterSpacing: 0.5 },
+  dividerLine:    { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
+  dividerText:    { fontSize: 11, color: '#aaa', marginHorizontal: 10, letterSpacing: 0.5 },
   socialRow:      { flexDirection: 'row', gap: 12, marginBottom: 32 },
-  socialBtn:      { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: c.card },
+  socialBtn:      { flex: 1, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   socialContent:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  socialText:     { fontSize: 14, fontWeight: '500', color: c.ink },
-  link:           { textAlign: 'center', fontSize: 14, color: c.muted },
-  linkBold:       { fontWeight: '600', color: c.ink },
+  socialText:     { fontSize: 14, fontWeight: '500', color: '#111' },
+  link:           { textAlign: 'center', fontSize: 14, color: '#888' },
+  linkBold:       { fontWeight: '600', color: '#111' },
 });

@@ -1,17 +1,14 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import PillBadge from '../components/PillBadge';
-import { ColorPalette, spacing, fontSize, radii } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
+import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr } from '../store/sessions';
+import { apiFetch } from '../api/client';
 import type { SessionRecord } from '../App';
-
-const BG_VIDEO = require('../assets/13058496_1080_1920_60fps.mp4');
 
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
@@ -29,25 +26,25 @@ function bestTimeLabel(sessions: SessionRecord[]): string | null {
 }
 
 export default function DashboardScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { sessions, user } = nav;
-  const videoRef   = useRef<Video>(null);
-  const [videoReady, setVideoReady] = useState(false);
-
-  // Seamless loop: seek to 0 when within 400 ms of the end
-  const handleStatus = (status: any) => {
-    if (
-      status.isLoaded &&
-      status.durationMillis &&
-      status.positionMillis >= status.durationMillis - 400
-    ) {
-      videoRef.current?.setPositionAsync(0);
-    }
-  };
   const name     = user.name !== 'User' ? user.name : (nav.params.name ?? 'User');
   const initial  = name.charAt(0).toUpperCase();
   const focusDay = `FOCUS ${DAYS[new Date().getDay()]}`;
+
+  // ── AI suggestion (with local fallback) ─────────────────────────────────────
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!nav.token) return;
+    apiFetch<{ suggestion: string } | null>('/ai/suggestion', nav.token)
+      .then(res => {
+        if (res?.suggestion) setAiSuggestion(res.suggestion);
+      })
+      .catch(() => {
+        // Silent fail — we'll fall back to the local heuristic below
+      });
+  }, [nav.token, sessions.length]);
+
 
   // ── Live stats from shared session store ────────────────────────────────────
   const SCORE         = computeTodayScore(sessions);
@@ -60,24 +57,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
   const bestTime  = bestTimeLabel(sessions);
 
   return (
-    <View style={styles.screen}>
-      {/* ── Full-screen video background ──────────────────────────────────── */}
-      <Video
-        ref={videoRef}
-        source={BG_VIDEO}
-        style={[StyleSheet.absoluteFill, { opacity: videoReady ? 1 : 0 }]}
-        resizeMode={ResizeMode.COVER}
-        isMuted
-        shouldPlay
-        onReadyForDisplay={() => setVideoReady(true)}
-        onPlaybackStatusUpdate={handleStatus}
-      />
-      {/* Solid fallback shown until the first video frame is ready */}
-      {!videoReady && <View style={styles.videoPlaceholder} />}
-      {/* Semi-transparent overlay so text remains readable */}
-      <View style={styles.overlay} />
-
-    <ScrollView style={styles.scrollArea} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -139,29 +119,35 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
               {user.preferredDuration} min{user.pomodoroEnabled ? ' · Pomodoro' : ''}
             </Text>
           </View>
-          <PillBadge label="Study" bg={colors.ink} color={colors.bg} />
+          <PillBadge label="Study" bg={colors.ink} color={colors.white} />
         </View>
       </Card>
 
-      {/* ── Smart Suggestion (driven by real session data) ────────────────── */}
-      <Card style={styles.mb14} padding={18}>
-        <View style={styles.suggestionHeader}>
-          <Ionicons name="bulb-outline" size={13} color={colors.muted} />{/* colors from useTheme */}
-          <SectionLabel noTopMargin style={styles.suggestionLabelOverride}>Smart Suggestion</SectionLabel>
-        </View>
-        {bestTime ? (
-          <Text style={styles.suggestionText}>
-            You're most productive around {bestTime}.{'\n'}
-            {dailyPct < 100
-              ? `${user.dailyGoalMinutes - todayMins} min left to hit today's goal.`
-              : "You've hit today's focus goal — great work!"}
-          </Text>
-        ) : (
-          <Text style={styles.suggestionText}>
-            Complete your first session to unlock personalised insights.
-          </Text>
-        )}
-      </Card>
+      {/* ── Smart Suggestion (AI-powered, with local fallback) ─────────────── */}
+      <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('AIInsights')}>
+        <Card style={styles.mb14} padding={18}>
+          <View style={styles.suggestionHeader}>
+            <Ionicons name="bulb-outline" size={13} color={colors.muted} />
+            <SectionLabel noTopMargin style={styles.suggestionLabelOverride}>Smart Suggestion</SectionLabel>
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+          </View>
+          {aiSuggestion ? (
+            <Text style={styles.suggestionText}>{aiSuggestion}</Text>
+          ) : bestTime ? (
+            <Text style={styles.suggestionText}>
+              You're most productive around {bestTime}.{'\n'}
+              {dailyPct < 100
+                ? `${user.dailyGoalMinutes - todayMins} min left to hit today's goal.`
+                : "You've hit today's focus goal — great work!"}
+            </Text>
+          ) : (
+            <Text style={styles.suggestionText}>
+              Complete your first session to unlock personalised insights.
+            </Text>
+          )}
+        </Card>
+      </TouchableOpacity>
 
       {/* ── Start CTA ─────────────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => nav.navigate('CreateSession')}>
@@ -169,49 +155,46 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
       </TouchableOpacity>
 
     </ScrollView>
-    </View>
   );
 }
 
-const makeStyles = (c: ColorPalette) => StyleSheet.create({
-  screen:           { flex: 1, backgroundColor: '#1a1a2e' },
-  videoPlaceholder: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1a1a2e' },
-  overlay:          { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.)' },
-  scrollArea:  { flex: 1 },
-  container:   { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
+
+const styles = StyleSheet.create({
+  screen:     { flex: 1, backgroundColor: colors.bg },
+  container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
 
   header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
-  focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: c.muted, letterSpacing: 1.5, marginBottom: 2 },
-  dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: c.ink },
-  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: c.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: c.bg, fontWeight: '700', fontSize: fontSize.lg },
+  focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
+  dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
+  avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
 
   scoreCard:          { marginBottom: 14 },
-  scoreLabelOverride: { color: c.mutedLight, marginBottom: spacing.sm },
-  scoreValue: { color: '#ffffff', fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
+  scoreLabelOverride: { color: colors.mutedLight, marginBottom: spacing.sm },
+  scoreValue: { color: colors.white, fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
   scoreMax:   { fontSize: fontSize.xl, color: '#666', fontWeight: 'normal' },
-  progressTrack: { height: 6, backgroundColor: c.darkBorder, borderRadius: 3, overflow: 'hidden' },
-  progressFill:  { height: 6, backgroundColor: c.yellow, borderRadius: 3 },
+  progressTrack: { height: 6, backgroundColor: colors.darkBorder, borderRadius: 3, overflow: 'hidden' },
+  progressFill:  { height: 6, backgroundColor: colors.yellow, borderRadius: 3 },
 
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: { flex: 1 },
-  statValue: { fontSize: 22, fontWeight: 'bold', color: c.ink, marginBottom: 2 },
-  statLabel: { fontSize: fontSize.xs, color: c.muted },
+  statValue: { fontSize: 22, fontWeight: 'bold', color: colors.ink, marginBottom: 2 },
+  statLabel: { fontSize: fontSize.xs, color: colors.muted },
 
   mb14: { marginBottom: 14 },
 
   goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalPct:    { fontSize: fontSize.lg, fontWeight: '700', color: c.ink },
-  goalSub:    { fontSize: fontSize.sm, color: c.muted, marginBottom: spacing.sm },
-  goalTrack:  { height: 6, backgroundColor: c.border, borderRadius: 3, overflow: 'hidden' },
-  goalFill:   { height: 6, backgroundColor: c.ink, borderRadius: 3 },
+  goalPct:    { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink },
+  goalSub:    { fontSize: fontSize.sm, color: colors.muted, marginBottom: spacing.sm },
+  goalTrack:  { height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
+  goalFill:   { height: 6, backgroundColor: colors.ink, borderRadius: 3 },
   sessionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: c.ink, marginBottom: 4 },
-  sessionSub:   { fontSize: fontSize.sm, color: c.muted },
+  sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 4 },
+  sessionSub:   { fontSize: fontSize.sm, color: colors.muted },
   suggestionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
   suggestionLabelOverride: { marginTop: 0, marginBottom: 0 },
-  suggestionText: { fontSize: fontSize.sm + 1, color: c.inkSoft, lineHeight: 22 },
+  suggestionText: { fontSize: fontSize.sm + 1, color: colors.inkSoft, lineHeight: 22 },
 
-  startBtn: { backgroundColor: c.ink, borderRadius: radii.md, paddingVertical: 18, alignItems: 'center', marginTop: 4 },
-  startBtnText: { color: c.bg, fontSize: fontSize.lg - 1, fontWeight: '600' },
+  startBtn: { backgroundColor: colors.ink, borderRadius: radii.md, paddingVertical: 18, alignItems: 'center', marginTop: 4 },
+  startBtnText: { color: colors.white, fontSize: fontSize.lg - 1, fontWeight: '600' },
 });

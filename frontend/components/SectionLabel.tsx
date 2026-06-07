@@ -1,7 +1,6 @@
 import React from 'react';
-import { Text, TextStyle } from 'react-native';
-import { fontSize, spacing } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
+import { Text, TextStyle, StyleSheet } from 'react-native';
+import { colors, fontSize, spacing } from '../constants/theme';
 
 type Props = {
   children: string;
@@ -11,18 +10,11 @@ type Props = {
 };
 
 export default function SectionLabel({ children, style, noTopMargin = false }: Props) {
-  const { colors } = useTheme();
   return (
     <Text
       style={[
-        {
-          fontSize:      fontSize.xs,
-          fontWeight:    '600',
-          color:         colors.muted,
-          letterSpacing: 0.8,
-          marginTop:     noTopMargin ? 0 : spacing.xl,
-          marginBottom:  spacing.sm + 2,
-        },
+        styles.label,
+        noTopMargin && { marginTop: 0 },
         style,
       ]}
     >
@@ -30,3 +22,14 @@ export default function SectionLabel({ children, style, noTopMargin = false }: P
     </Text>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize:      fontSize.xs,
+    fontWeight:    '600',
+    color:         colors.muted,
+    letterSpacing: 0.8,
+    marginTop:     spacing.xl,
+    marginBottom:  spacing.sm + 2,
+  },
+});

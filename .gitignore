@@ -145,9 +145,5 @@ dist
 # my notes
 notes.md
 
-# Large video assets (too big for GitHub — keep locally)
-*.mp4
-*.mov
-*.avi
-*.webm
-*.m4v
+# local AI testing script (contains JWT token)
+backend/test-ai.ps1

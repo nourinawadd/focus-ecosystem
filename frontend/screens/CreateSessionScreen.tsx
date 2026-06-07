@@ -1,106 +1,29 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Switch, StyleSheet, Platform, Animated,
+  Switch, StyleSheet, Platform, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
-import { ColorPalette, spacing, radii, fontSize } from '../constants/theme';
-import { useTheme } from '../context/ThemeContext';
+import { colors, spacing, radii, fontSize } from '../constants/theme';
+import {
+  isSupported as screenTimeSupported,
+  isNativeReady as screenTimeNativeReady,
+  getLoadError as screenTimeLoadError,
+  getAuthorizationStatus,
+  requestAuthorization,
+  presentPicker,
+  getSelectionSummary,
+  formatSummary,
+  summaryTotal,
+  type ScreenTimeSelectionSummary,
+  type ScreenTimeAuthStatus,
+} from 'anchor-screen-time';
 
 const SESSION_TYPES = ['Study', 'Work', 'Custom'] as const;
-
-// ─── Wheel picker constants ────────────────────────────────────────────────
-const ITEM_H  = 46;
-const VISIBLE = 7;                          // odd — centre slot = selected
-const PAD     = Math.floor(VISIBLE / 2);   // 3 padding rows top & bottom
-const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const MINS    = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
-
-// Pseudo-gradient fade strips
-function FadeBar({ top }: { top: boolean }) {
-  const { colors } = useTheme();
-  const wp = useMemo(() => makeWp(colors), [colors]);
-  const alphas = top ? [0.95, 0.7, 0.35, 0.08] : [0.08, 0.35, 0.7, 0.95];
-  // Use colors.bg so the fade matches the screen background in both themes
-  const rgb = colors.bg === '#0e0e0e' ? '14,14,14' : '245,245,245';
-  return (
-    <View style={[wp.fadeBar, top ? { top: 0 } : { bottom: 0 }]} pointerEvents="none">
-      {alphas.map((a, i) => (
-        <View key={i} style={{ flex: 1, backgroundColor: `rgba(${rgb},${a})` }} />
-      ))}
-    </View>
-  );
-}
-
-function WheelPicker({
-  items, selectedIndex, onChange, label,
-}: {
-  items: string[]; selectedIndex: number;
-  onChange: (i: number) => void; label: string;
-}) {
-  const { colors } = useTheme();
-  const wp = useMemo(() => makeWp(colors), [colors]);
-  const scrollY   = useRef(new Animated.Value(selectedIndex * ITEM_H)).current;
-  const scrollRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: selectedIndex * ITEM_H, animated: false });
-      scrollY.setValue(selectedIndex * ITEM_H);
-    }, 80);
-    return () => clearTimeout(t);
-  }, []);
-
-  const snap = (e: any) => {
-    const offset = e.nativeEvent.contentOffset.y;
-    const idx = Math.max(0, Math.min(items.length - 1, Math.round(offset / ITEM_H)));
-    onChange(idx);
-  };
-
-  return (
-    <View style={wp.col}>
-      <View style={wp.drum}>
-        {/* iOS-style selection lines */}
-        <View style={[wp.selLine, { top: ITEM_H * PAD }]}           pointerEvents="none" />
-        <View style={[wp.selLine, { top: ITEM_H * (PAD + 1) - StyleSheet.hairlineWidth }]} pointerEvents="none" />
-
-        <Animated.ScrollView
-          ref={scrollRef as any}
-          snapToInterval={ITEM_H}
-          decelerationRate="fast"
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true },
-          )}
-          onMomentumScrollEnd={snap}
-          onScrollEndDrag={snap}
-          contentContainerStyle={{ paddingVertical: ITEM_H * PAD }}
-        >
-          {items.map((item, i) => {
-            const center     = i * ITEM_H;
-            const inputRange = [center - ITEM_H * 2, center - ITEM_H, center, center + ITEM_H, center + ITEM_H * 2];
-            const opacity = scrollY.interpolate({ inputRange, outputRange: [0.12, 0.4, 1, 0.4, 0.12], extrapolate: 'clamp' });
-            const scale   = scrollY.interpolate({ inputRange, outputRange: [0.72, 0.86, 1, 0.86, 0.72], extrapolate: 'clamp' });
-            return (
-              <Animated.View key={i} style={[wp.item, { opacity, transform: [{ scale }] }]}>
-                <Text style={wp.num}>{item}</Text>
-              </Animated.View>
-            );
-          })}
-        </Animated.ScrollView>
-
-        <FadeBar top />
-        <FadeBar top={false} />
-      </View>
-      <Text style={wp.label}>{label}</Text>
-    </View>
-  );
-}
+const DURATIONS = [15, 25, 30, 45, 60, 90];
 const APPS = ['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit', 'Snapchat', 'Discord', 'Games'];
 
 const POMO_PRESETS = [
@@ -113,22 +36,66 @@ const POMO_PRESETS = [
 type PomoPreset = typeof POMO_PRESETS[number];
 
 export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [sessionType, setSessionType] = useState<string>('Study');
-
-  // Wheel picker state — derive from user preferred duration
-  const prefH = Math.min(23, Math.floor(nav.user.preferredDuration / 60));
-  const prefM = Math.min(59, nav.user.preferredDuration % 60);
-  const [hourIdx,   setHourIdx]   = useState(prefH);
-  const [minuteIdx, setMinuteIdx] = useState(prefM > 0 ? prefM : 5); // default 5 min
-  // hourIdx & minuteIdx map directly to their values (HOURS[i] = padded i, MINS[i] = padded i)
-  const duration = Math.max(1, hourIdx * 60 + minuteIdx);
+  const [duration, setDuration] = useState(() =>
+    DURATIONS.includes(nav.user.preferredDuration) ? nav.user.preferredDuration : 25,
+  );
   const [pomodoro,   setPomodoro]   = useState(() => nav.user.pomodoroEnabled);
   const [pomoPreset, setPomoPreset] = useState<PomoPreset>(POMO_PRESETS[0]);
   const [pomoRounds, setPomoRounds] = useState(2);
   const [blockedApps, setBlockedApps] = useState<string[]>(['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit']);
   const [showAllApps, setShowAllApps] = useState(false);
+  const [stSummary, setStSummary]   = useState<ScreenTimeSelectionSummary | null>(null);
+  const [stStatus,  setStStatus]    = useState<ScreenTimeAuthStatus>('notDetermined');
+  const [stBusy,    setStBusy]      = useState(false);
+
+  useEffect(() => {
+    if (!screenTimeNativeReady()) return;
+    let alive = true;
+    (async () => {
+      try {
+        const [status, summary] = await Promise.all([getAuthorizationStatus(), getSelectionSummary()]);
+        if (!alive) return;
+        setStStatus(status);
+        setStSummary(summary);
+      } catch {
+        // ignore — surface in the configure flow
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const configureScreenTime = async () => {
+    if (!screenTimeSupported()) return;
+    if (!screenTimeNativeReady()) {
+      Alert.alert(
+        'Screen Time module not loaded',
+        `The native module failed to load:\n\n${screenTimeLoadError()?.message ?? 'unknown'}\n\nThis usually means the build didn't include the module. Try rebuilding.`,
+      );
+      return;
+    }
+    setStBusy(true);
+    try {
+      let status = stStatus;
+      if (status !== 'approved') {
+        status = await requestAuthorization();
+        setStStatus(status);
+      }
+      if (status !== 'approved') {
+        Alert.alert(
+          'Screen Time access needed',
+          'Anchor needs Screen Time access to shield distracting apps during your sessions. You can enable it later in Settings.',
+        );
+        return;
+      }
+      const summary = await presentPicker();
+      if (summary !== null) setStSummary(summary);
+    } catch (err: any) {
+      Alert.alert('Screen Time error', err?.message ?? 'Could not open the app picker.');
+    } finally {
+      setStBusy(false);
+    }
+  };
 
   const pomoDuration = pomoPreset.work * pomoRounds;
 
@@ -177,17 +144,21 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         {!pomodoro ? (
           <>
             <SectionLabel>Duration</SectionLabel>
-            {/* iOS-style drum-roll picker */}
-            <View style={styles.wheelRow}>
-              <WheelPicker items={HOURS} selectedIndex={hourIdx} onChange={setHourIdx} label="hours" />
-              <Text style={styles.wheelColon}>:</Text>
-              <WheelPicker items={MINS}  selectedIndex={minuteIdx} onChange={setMinuteIdx} label="min" />
-            </View>
-            <Text style={styles.durationSummary}>
-              {parseInt(HOURS[hourIdx]) > 0
-                ? `${HOURS[hourIdx]}h ${MINS[minuteIdx]}min`
-                : `${MINS[minuteIdx]} min`}
+            <Text style={styles.durationBig}>
+              {duration} <Text style={styles.durationUnit}>min</Text>
             </Text>
+            <View style={styles.durationRow}>
+              {DURATIONS.map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.durationChip, duration === d && styles.durationChipActive]}
+                  onPress={() => setDuration(d)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.durationChipText, duration === d && styles.durationChipTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </>
         ) : (
           <>
@@ -261,70 +232,114 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           )}
         </View>
 
+        {/* Screen Time real blocking (iOS only) */}
+        {screenTimeSupported() && (
+          <>
+            <SectionLabel>Screen Time Shield</SectionLabel>
+            <TouchableOpacity
+              style={styles.stCard}
+              onPress={configureScreenTime}
+              activeOpacity={0.85}
+              disabled={stBusy}
+            >
+              <View style={styles.stIconWrap}>
+                <Ionicons name="shield-checkmark-outline" size={22} color={colors.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stTitle}>
+                  {summaryTotal(stSummary) > 0 ? 'Apps blocked by iOS' : 'Configure blocked apps'}
+                </Text>
+                <Text style={styles.stSub} numberOfLines={1}>
+                  {stStatus !== 'approved'
+                    ? 'Tap to grant Screen Time access'
+                    : formatSummary(stSummary)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </TouchableOpacity>
+          </>
+        )}
+
         {/* Actions */}
-        <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('NFCScan', startParams)} activeOpacity={0.8}>
-          <Text style={styles.nfcBtnText}>Tap NFC Tag to Start</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.7}>
-          <Text style={styles.skipBtnText}>Start Without NFC</Text>
-        </TouchableOpacity>
+        {nav.userTags.length > 0 ? (
+          <>
+            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('NFCScan', startParams)} activeOpacity={0.8}>
+              <Text style={styles.nfcBtnText}>Scan NFC Tag to Start</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.7}>
+              <Text style={styles.skipBtnText}>Start Without NFC</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.8}>
+              <Text style={styles.nfcBtnText}>Start Session</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.7}>
+              <Text style={styles.skipBtnText}>Set up NFC tags</Text>
+            </TouchableOpacity>
+          </>
+        )}
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
 
-const makeStyles = (c: ColorPalette) => StyleSheet.create({
-  screen:  { flex: 1, backgroundColor: c.bg },
+const styles = StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: colors.bg },
   header:  {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
-    paddingBottom: spacing.md, backgroundColor: c.bg,
+    paddingBottom: spacing.md, backgroundColor: colors.bg,
   },
   backBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  title:        { fontSize: fontSize.xl, fontWeight: '700', color: c.ink },
+  title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   headerSpacer: { width: 40 },
   body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
 
   typeRow:            { flexDirection: 'row', gap: spacing.sm + 2 },
-  typePill:           { paddingVertical: 10, paddingHorizontal: 22, borderRadius: radii.full, backgroundColor: c.border },
-  typePillActive:     { backgroundColor: c.ink },
-  typePillText:       { fontSize: fontSize.sm + 1, fontWeight: '600', color: c.inkSoft },
-  typePillTextActive: { color: c.bg },
+  typePill:           { paddingVertical: 10, paddingHorizontal: 22, borderRadius: radii.full, backgroundColor: colors.border },
+  typePillActive:     { backgroundColor: colors.ink },
+  typePillText:       { fontSize: fontSize.sm + 1, fontWeight: '600', color: colors.inkSoft },
+  typePillTextActive: { color: colors.white },
 
-  wheelRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginVertical: spacing.sm },
-  wheelColon:      { fontSize: 32, fontWeight: '300', color: c.muted, marginTop: 18 },
-  durationSummary: { textAlign: 'center', fontSize: fontSize.sm + 1, color: c.muted, marginBottom: spacing.sm },
-  durationChip:           { paddingVertical: spacing.sm, paddingHorizontal: 18, borderRadius: radii.full, backgroundColor: c.border },
-  durationChipActive:     { backgroundColor: c.ink },
-  durationChipText:       { fontSize: fontSize.sm + 1, fontWeight: '600', color: c.inkSoft },
-  durationChipTextActive: { color: c.bg },
+  durationBig:  { fontSize: 60, fontWeight: '700', color: colors.ink, textAlign: 'center', marginVertical: 6 },
+  durationUnit: { fontSize: 22, fontWeight: '400', color: colors.muted },
+  durationRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm + 2, justifyContent: 'center', marginBottom: spacing.xs },
+  durationChip:           { paddingVertical: spacing.sm, paddingHorizontal: 18, borderRadius: radii.full, backgroundColor: colors.border },
+  durationChipActive:     { backgroundColor: colors.ink },
+  durationChipText:       { fontSize: fontSize.sm + 1, fontWeight: '600', color: colors.inkSoft },
+  durationChipTextActive: { color: colors.white },
 
   toggleCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
   toggleInfo: { flex: 1 },
-  toggleTitle: { fontSize: fontSize.lg - 1, fontWeight: '600', color: c.ink },
-  toggleSub:   { fontSize: fontSize.sm, color: c.muted, marginTop: 2 },
+  toggleTitle: { fontSize: fontSize.lg - 1, fontWeight: '600', color: colors.ink },
+  toggleSub:   { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
 
   appsWrap:         { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm + 2 },
-  appChip:          { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radii.full, backgroundColor: c.border },
-  appChipActive:    { backgroundColor: c.ink },
-  appChipText:      { fontSize: fontSize.sm, fontWeight: '500', color: c.inkSoft },
-  appChipTextActive: { color: c.bg },
+  appChip:          { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radii.full, backgroundColor: colors.border },
+  appChipActive:    { backgroundColor: colors.ink },
+  appChipText:      { fontSize: fontSize.sm, fontWeight: '500', color: colors.inkSoft },
+  appChipTextActive: { color: colors.white },
 
-  nfcBtn:      { backgroundColor: c.ink, borderRadius: radii.lg, paddingVertical: 16, alignItems: 'center', marginTop: 28 },
-  nfcBtnText:  { color: c.bg, fontSize: fontSize.lg - 1, fontWeight: '700' },
+  stCard:    {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.border, borderRadius: radii.lg,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  stIconWrap: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stTitle:   { fontSize: fontSize.md, fontWeight: '600', color: colors.ink },
+  stSub:     { fontSize: fontSize.sm, color: colors.muted, marginTop: 2 },
+
+  nfcBtn:      { backgroundColor: colors.ink, borderRadius: radii.lg, paddingVertical: 16, alignItems: 'center', marginTop: 28 },
+  nfcBtnText:  { color: colors.white, fontSize: fontSize.lg - 1, fontWeight: '700' },
   skipBtn:     { alignItems: 'center', paddingVertical: 14, marginTop: spacing.sm + 2 },
-  skipBtnText: { fontSize: fontSize.md, color: c.muted, fontWeight: '500' },
-});
-
-// ─── Wheel picker styles ───────────────────────────────────────────────────
-const makeWp = (c: ColorPalette) => StyleSheet.create({
-  col:     { alignItems: 'center', gap: 6 },
-  label:   { fontSize: fontSize.xs + 1, fontWeight: '600', color: c.muted, letterSpacing: 0.8, textTransform: 'uppercase' },
-  drum:    { width: 100, height: ITEM_H * VISIBLE, overflow: 'hidden' },
-  selLine: { position: 'absolute', left: 4, right: 4, height: StyleSheet.hairlineWidth, backgroundColor: c.border, zIndex: 10 },
-  item:    { height: ITEM_H, justifyContent: 'center', alignItems: 'center' },
-  num:     { fontSize: 28, fontWeight: '300', color: c.ink, fontVariant: ['tabular-nums'] as any },
-  fadeBar: { position: 'absolute', left: 0, right: 0, height: ITEM_H * PAD, zIndex: 5, flexDirection: 'column' },
+  skipBtnText: { fontSize: fontSize.md, color: colors.muted, fontWeight: '500' },
 });
