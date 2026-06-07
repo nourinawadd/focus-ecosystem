@@ -30,6 +30,12 @@
           <string>dev.gradproject.anchor</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.googleusercontent.apps.129531586894-j4idsokok0s7nvlb3lifbhkpvh4dmg9j</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>29</string>
