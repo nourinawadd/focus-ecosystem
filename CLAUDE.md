@@ -90,9 +90,17 @@ Backend requires a `.env` file with:
 ```
 MONGO_URI=
 JWT_SECRET=
+JWT_REFRESH_SECRET=
 JWT_EXPIRES_IN=7d   # optional, defaults to 7d
 PORT=5000           # optional, defaults to 5000
+
+# Social sign-in (Google/Apple) — required for /api/auth/google and /api/auth/apple
+GOOGLE_WEB_CLIENT_ID=    # OAuth Web client ID; the audience of the native SDK's idToken
+GOOGLE_IOS_CLIENT_ID=    # OAuth iOS client ID; also accepted as a valid audience
+APPLE_BUNDLE_ID=dev.gradproject.anchor   # audience (aud) of Apple's identityToken
 ```
+
+**Social sign-in** (`utils/socialAuth.js`): the mobile app sends a provider-signed ID token to `POST /api/auth/google` (`{ idToken }`) or `POST /api/auth/apple` (`{ identityToken, fullName?, email? }`). The backend verifies the token's signature/issuer/audience against the provider's JWKS, then `findOrCreateSocialUser()` (in `routes/auth.js`) resolves it to a User — reusing the `googleId`/`appleId`-linked account, else linking to an existing account by **provider-verified email**, else creating a passwordless account — and issues the same access+refresh pair as `/login`. Social-only users have no `passwordHash`; `comparePassword` returns false for them so `/login` cleanly rejects.
 
 ## Workflow
 

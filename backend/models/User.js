@@ -27,8 +27,19 @@ const SettingsSchema = new mongoose.Schema({
 
 const UserSchema = new mongoose.Schema({
   email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
-  passwordHash: { type: String, required: true },
-  name:         { type: String, required: true, trim: true },
+  // Optional: social-only accounts (Google/Apple) never set a password. A user
+  // with no passwordHash simply cannot authenticate via /login (see guard below).
+  passwordHash: { type: String },
+  // Optional: Apple only returns a name on the first authorization and the user
+  // may decline it, so a name is not guaranteed. Routes supply a fallback.
+  name:         { type: String, trim: true },
+
+  // Linked third-party identities. `sub` claim from a verified provider ID token.
+  // Sparse + unique: at most one account per provider identity, but accounts
+  // without the field (e.g. password-only users) don't collide on null.
+  googleId:     { type: String, index: { unique: true, sparse: true } },
+  appleId:      { type: String, index: { unique: true, sparse: true } },
+
   settings:     { type: SettingsSchema, default: () => ({}) },
 }, {
   timestamps: true,
@@ -36,10 +47,14 @@ const UserSchema = new mongoose.Schema({
 
 UserSchema.pre('save', async function () {
   if (!this.isModified('passwordHash')) return;
+  // A social account may clear/lack a password; only hash a real value.
+  if (!this.passwordHash) return;
   this.passwordHash = await bcrypt.hash(this.passwordHash, 12);
 });
 
 UserSchema.methods.comparePassword = function (candidate) {
+  // Social-only users have no hash — never authenticate them via password.
+  if (!this.passwordHash) return Promise.resolve(false);
   return bcrypt.compare(candidate, this.passwordHash);
 };
 
