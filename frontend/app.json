@@ -2,6 +2,7 @@
   "expo": {
     "name": "Anchor",
     "slug": "anchor",
+    "scheme": "anchor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,7 +20,7 @@
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
         "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions."
       },
-      "buildNumber": "27",
+      "buildNumber": "29",
       "entitlements": {
         "com.apple.developer.family-controls": true
       }
@@ -55,11 +56,11 @@
         }
       ]
     ],
-    "owner": "munaaldhshan",
     "extra": {
       "eas": {
-        "projectId": "9852f4f5-eada-487e-9f44-800a3adab259"
+        "projectId": "7ecac53d-60ff-4b8b-88a0-7a5890fa51f3"
       }
-    }
+    },
+    "owner": "anchorr"
   }
 }
