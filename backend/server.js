@@ -9,12 +9,14 @@ import './models/Session.js';
 import './models/FocusLog.js';
 import './models/Statistics.js';
 import './models/AIInsight.js';
+import './models/Task.js';
 import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import errorHandler    from './middleware/errorHandler.js';
-import aiRoutes        from './routes/ai.js';
+import aiRoutes from './routes/ai.js';
+import taskRoutes from './routes/tasks.js';
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -26,7 +28,8 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/user',      userRoutes);
 app.use('/api/sessions',  sessionRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/ai',        aiRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/tasks', taskRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
