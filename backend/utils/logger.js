@@ -5,9 +5,10 @@
 import pino from 'pino';
 
 const isProd = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
 
 const logger = pino({
-  level: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
+  level: process.env.LOG_LEVEL || (isTest ? 'silent' : isProd ? 'info' : 'debug'),
   // Never let a stray token/password reach the logs.
   redact: {
     paths: [
@@ -20,7 +21,9 @@ const logger = pino({
     ],
     remove: true,
   },
-  transport: isProd
+  // pino-pretty spawns a worker thread; skip it in prod (JSON) and test (would
+  // leave an open handle that stalls the test runner's exit).
+  transport: isProd || isTest
     ? undefined
     : { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss' } },
 });

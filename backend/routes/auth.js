@@ -40,11 +40,16 @@ async function issueTokens(user, req) {
   return { accessToken, refreshToken, user: publicUser(user) };
 }
 
+// Rate limits would otherwise trip during the test suite (many logins/registers
+// from one IP), so they're disabled under NODE_ENV=test.
+const skipInTest = () => process.env.NODE_ENV === 'test';
+
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,           // 1 minute
   max: 5,                        // 5 attempts per IP
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { message: 'Too many login attempts, please try again later' },
 });
 
@@ -53,6 +58,7 @@ const registerLimiter = rateLimit({
   max: 10,                       // 10 accounts per IP
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { message: 'Too many accounts created, please try again later' },
 });
 
@@ -61,6 +67,7 @@ const socialLimiter = rateLimit({
   max: 10,                       // 10 social sign-in attempts per IP
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipInTest,
   message: { message: 'Too many sign-in attempts, please try again later' },
 });
 
