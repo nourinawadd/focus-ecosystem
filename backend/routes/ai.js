@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.use(auth);
 
-function handleAIError(err, res) {
+function handleAIError(err, req, res) {
   if (err.code === 'NO_API_KEY') {
     return res.status(503).json({ message: 'AI service not configured', code: err.code });
   }
@@ -22,7 +22,7 @@ function handleAIError(err, res) {
   if (err.code === 'BAD_JSON') {
     return res.status(502).json({ message: 'AI returned malformed response', code: err.code });
   }
-  console.error('AI route error:', err);
+  req.log.error({ err }, 'AI route error');
   return res.status(500).json({ message: err.message || 'AI service error' });
 }
 
@@ -32,7 +32,7 @@ router.post('/insights/generate', async (req, res) => {
     const { insight, cached } = await getOrGenerateInsight(req.user._id, { force: true });
     res.json({ insight, cached });
   } catch (err) {
-    handleAIError(err, res);
+    handleAIError(err, req, res);
   }
 });
 
@@ -66,7 +66,7 @@ router.get('/insights', async (req, res) => {
       throw genErr;
     }
   } catch (err) {
-    handleAIError(err, res);
+    handleAIError(err, req, res);
   }
 });
 
@@ -79,7 +79,7 @@ router.get('/suggestion', async (req, res) => {
     if (err.code === 'NOT_ENOUGH_DATA') {
       return res.status(204).end();
     }
-    handleAIError(err, res);
+    handleAIError(err, req, res);
   }
 });
 

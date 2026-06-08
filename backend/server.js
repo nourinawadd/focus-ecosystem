@@ -3,6 +3,7 @@ import express  from 'express';
 import mongoose from 'mongoose';
 import cors     from 'cors';
 import helmet   from 'helmet';
+import pinoHttp from 'pino-http';
 import './models/User.js';
 import './models/NFCTag.js';
 import './models/UserTag.js';
@@ -18,6 +19,7 @@ import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import errorHandler    from './middleware/errorHandler.js';
+import logger          from './utils/logger.js';
 import aiRoutes from './routes/ai.js';
 import taskRoutes from './routes/tasks.js';
 
@@ -44,6 +46,12 @@ app.use(cors({
   origin:      process.env.CORS_ORIGINS.split(',').map(o => o.trim()),
   credentials: false,
 }));
+// Structured per-request logging. Health checks are noisy and uninteresting,
+// so skip auto-logging them. Each request gets a `req.log` child logger.
+app.use(pinoHttp({
+  logger,
+  autoLogging: { ignore: (req) => req.url === '/api/health' },
+}));
 app.use(express.json({ limit: '100kb' }));
 
 app.use('/api/auth',      authRoutes);
@@ -67,18 +75,18 @@ app.use(errorHandler);
 
 connectDB()
   .then(() => {
-    const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    const server = app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
 
     // Graceful shutdown: stop accepting connections, drain in-flight requests,
     // close Mongo, then exit. Force-exit if draining stalls.
     const shutdown = (signal) => {
-      console.log(`${signal} received — shutting down gracefully`);
+      logger.info(`${signal} received — shutting down gracefully`);
       server.close(async () => {
         await disconnectDB();
         process.exit(0);
       });
       setTimeout(() => {
-        console.error('Could not close connections in time — forcing exit');
+        logger.error('Could not close connections in time — forcing exit');
         process.exit(1);
       }, 10_000).unref();
     };
@@ -87,6 +95,6 @@ connectDB()
     process.on('SIGINT',  () => shutdown('SIGINT'));
   })
   .catch(err => {
-    console.error('MongoDB connection error:', err.message);
+    logger.error({ err }, 'MongoDB connection error');
     process.exit(1);
   });

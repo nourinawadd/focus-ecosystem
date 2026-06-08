@@ -1,6 +1,8 @@
+import logger from '../utils/logger.js';
+
 // Global Express error handler. Maps known error shapes to proper HTTP status
 // codes; everything else falls through to 500.
-export default function errorHandler(err, _req, res, _next) {
+export default function errorHandler(err, req, res, _next) {
   // Mongoose document validation
   if (err.name === 'ValidationError') {
     const message = Object.values(err.errors).map(e => e.message).join(', ');
@@ -28,6 +30,11 @@ export default function errorHandler(err, _req, res, _next) {
     return res.status(err.status).json({ message: err.message });
   }
 
-  console.error(err);
+  // Unhandled — log with request context (pino-http's per-request logger when
+  // available, else the shared one) so 500s are traceable.
+  (req.log ?? logger).error(
+    { err, req: { url: req.originalUrl, method: req.method, userId: req.user?._id } },
+    'Unhandled error',
+  );
   res.status(500).json({ message: err.message || 'Server error' });
 }

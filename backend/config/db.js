@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import dns from 'node:dns';
+import logger from '../utils/logger.js';
 
 // Node's bundled DNS resolver (c-ares) can fail the `mongodb+srv` SRV lookup
 // with ECONNREFUSED on restrictive networks (e.g. public WiFi that blocks
@@ -14,15 +15,15 @@ const OPTIONS = {
 };
 
 export async function connectDB() {
-  mongoose.connection.on('error',        (err) => console.error('MongoDB error:', err.message));
-  mongoose.connection.on('disconnected', ()    => console.warn('MongoDB disconnected'));
+  mongoose.connection.on('error',        (err) => logger.error({ err }, 'MongoDB error'));
+  mongoose.connection.on('disconnected', ()    => logger.warn('MongoDB disconnected'));
 
   await mongoose.connect(process.env.MONGO_URI, OPTIONS);
-  console.log('MongoDB connected');
+  logger.info('MongoDB connected');
   return mongoose.connection;
 }
 
 export async function disconnectDB() {
   await mongoose.connection.close(false);
-  console.log('MongoDB connection closed');
+  logger.info('MongoDB connection closed');
 }
