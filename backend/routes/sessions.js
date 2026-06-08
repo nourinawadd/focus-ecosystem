@@ -7,7 +7,6 @@ import asyncHandler from '../middleware/asyncHandler.js';
 import {
   requireObjectId, requireInt, requireEnum, requireString, requireDateStr, badRequest,
 } from '../middleware/validate.js';
-import { userTodayStr, shiftDateStr } from '../utils/datetime.js';
 import { invalidateSuggestion } from '../services/aiSuggestionService.js';
 
 const router = express.Router();
@@ -33,37 +32,13 @@ function validateBlockedApps(arr) {
 }
 
 /**
- * Current streak: walk back day-by-day from today (user tz), hitting the
- * unique {userId, dateStr} index, until a day without a completed session.
- * O(streak length) rather than O(all sessions). Longest streak only grows, so
- * it's max(current, the largest longestStreak already recorded).
- */
-async function computeStreaks(userId, tz) {
-  let cursor  = userTodayStr(tz);
-  let current = 0;
-  for (;;) {
-    const stat = await Statistics.findOne({ userId, dateStr: cursor }, { sessionsCompleted: 1 });
-    if (stat?.sessionsCompleted > 0) {
-      current++;
-      cursor = shiftDateStr(cursor, -1);
-    } else break;
-  }
-
-  const longestDoc = await Statistics
-    .findOne({ userId }, { longestStreak: 1 })
-    .sort({ longestStreak: -1 });
-  const longest = Math.max(current, longestDoc?.longestStreak ?? 0);
-
-  return { current, longest };
-}
-
-/**
  * After any session mutation: rebuild the affected day's metrics, recompute the
- * streak efficiently, and persist it. Statistics is never mutated directly.
+ * streak efficiently (Statistics.computeStreak), and persist it. Statistics is
+ * never mutated directly.
  */
 async function syncStats(userId, dateStr, tz) {
   await Statistics.rebuildForDay(userId, dateStr, tz);
-  const { current, longest } = await computeStreaks(userId, tz);
+  const { current, longest } = await Statistics.computeStreak(userId, tz);
   await Statistics.setStreak(userId, dateStr, current, longest);
   return { streak: current, longestStreak: longest };
 }
@@ -178,7 +153,7 @@ router.patch('/:id/end', asyncHandler(async (req, res) => {
         endedAt: endTime,
       },
     },
-    { new: true },
+    { returnDocument: 'after' },
   );
   if (!updated) return res.status(409).json({ message: 'Session already ended' });
 

@@ -12,5 +12,13 @@ export default defineConfig({
     // One Mongo instance shared across files; run files serially so they don't
     // race on the same in-memory database.
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      // Report on our own source only (test files + entrypoints excluded).
+      // socialAuth.js / config/gemini.js are intentionally mocked in tests, so
+      // their real verification/SDK paths show low coverage — by design.
+      include: ['routes/**', 'models/**', 'utils/**', 'services/**', 'middleware/**'],
+      reporter: ['text', 'html'],
+    },
   },
 });

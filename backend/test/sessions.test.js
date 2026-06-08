@@ -133,3 +133,44 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('focus score formula', () => {
+  // Drive one session end through the server-side score computation.
+  async function scoreFor({ timerMode = 'COUNTDOWN', planned = 25, actual = 25, distractions = 0 }) {
+    const { token } = await makeUser();
+    const created = await createSession(token, { timerMode, timerConfig: { plannedDuration: planned } });
+    for (let i = 0; i < distractions; i++) {
+      await request(app).post(`/api/sessions/${created.body.id}/log`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ event: 'APP_BLOCKED', metadata: { packageName: 'com.example.app' } });
+    }
+    const ended = await request(app).patch(`/api/sessions/${created.body.id}/end`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'COMPLETED', timerState: { actualDuration: actual } });
+    expect(ended.status).toBe(200);
+    return ended.body.session.focusScore;
+  }
+
+  it('adds the +8 Pomodoro bonus, clamped to 99', async () => {
+    // ratio 1 → 80, +8 pomo, +12 = 100 → clamped to 99.
+    expect(await scoreFor({ timerMode: 'POMODORO' })).toBe(99);
+  });
+
+  it('gives no bonus for COUNTDOWN or STOPWATCH', async () => {
+    expect(await scoreFor({ timerMode: 'COUNTDOWN' })).toBe(92);   // 80 + 12
+    expect(await scoreFor({ timerMode: 'STOPWATCH' })).toBe(92);
+  });
+
+  it('scales with the actual/planned ratio', async () => {
+    expect(await scoreFor({ planned: 50, actual: 25 })).toBe(52);  // ratio 0.5 → 40 + 12
+  });
+
+  it('caps the distraction penalty at 24 (≥6 blocks)', async () => {
+    expect(await scoreFor({ distractions: 6 })).toBe(68);          // 92 − 24
+    expect(await scoreFor({ distractions: 10 })).toBe(68);         // still −24 (capped)
+  });
+
+  it('never drops below the floor of 20', async () => {
+    expect(await scoreFor({ actual: 0 })).toBe(20);                // 0 + 12 → clamped up to 20
+  });
+});

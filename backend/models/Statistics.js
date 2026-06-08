@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { toUserDate } from '../utils/datetime.js';
+import { toUserDate, userTodayStr, shiftDateStr } from '../utils/datetime.js';
 
 const StatisticsSchema = new mongoose.Schema({
   userId: {
@@ -87,7 +87,7 @@ StatisticsSchema.statics.rebuildForDay = async function (userId, dateStr, tz = '
         dailyFocusScore,
       },
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 };
 
@@ -97,6 +97,38 @@ StatisticsSchema.statics.setStreak = function (userId, dateStr, currentStreak, l
     { userId, dateStr },
     { $set: { currentStreak, longestStreak } },
   );
+};
+
+/**
+ * Current + longest streak, walking back day-by-day from "today" in the user's
+ * timezone, hitting the unique {userId, dateStr} index. O(streak length).
+ *
+ * Grace period: a streak stays alive until the day actually ends. We begin the
+ * walk at today only if today already has a completed session; otherwise we
+ * begin at yesterday — so a day that's merely idle (or has only an abandoned
+ * session) so far doesn't prematurely zero a streak that's still live. Longest
+ * streak only grows, so it's max(current, the largest ever recorded).
+ */
+StatisticsSchema.statics.computeStreak = async function (userId, tz = 'UTC') {
+  const todayStr  = userTodayStr(tz);
+  const todayStat = await this.findOne({ userId, dateStr: todayStr }, { sessionsCompleted: 1 });
+
+  let cursor  = todayStat?.sessionsCompleted > 0 ? todayStr : shiftDateStr(todayStr, -1);
+  let current = 0;
+  for (;;) {
+    const stat = await this.findOne({ userId, dateStr: cursor }, { sessionsCompleted: 1 });
+    if (stat?.sessionsCompleted > 0) {
+      current++;
+      cursor = shiftDateStr(cursor, -1);
+    } else break;
+  }
+
+  const longestDoc = await this
+    .findOne({ userId }, { longestStreak: 1 })
+    .sort({ longestStreak: -1 });
+  const longest = Math.max(current, longestDoc?.longestStreak ?? 0);
+
+  return { current, longest };
 };
 
 export default mongoose.model('Statistics', StatisticsSchema);

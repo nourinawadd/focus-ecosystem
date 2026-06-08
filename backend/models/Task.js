@@ -11,6 +11,4 @@ const TaskSchema = new mongoose.Schema({
     priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
 }, { timestamps: true });
 
-TaskSchema.index({ userId: 1 });
-
 export default mongoose.model('Task', TaskSchema);

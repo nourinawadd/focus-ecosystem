@@ -46,7 +46,7 @@ router.patch('/settings', asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.user._id,
     { $set: updates },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
   res.json(user);
 }));
@@ -68,7 +68,7 @@ router.post('/nfc-tags', asyncHandler(async (req, res) => {
   const tag = await NFCTag.findOneAndUpdate(
     { uid },
     { uid },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: 'after' },
   );
 
   const existing = await UserTag.findOne({ userId: req.user._id, tagId: tag._id });

@@ -74,12 +74,14 @@ router.get('/summary', asyncHandler(async (req, res) => {
     // Bar chart data
     const DAY = ['S','M','T','W','T','F','S'];
     let barData;
+    // Bars show completed focus minutes only, matching totalFocusMinutes
+    // (abandoned sessions contribute to neither).
     if (period === 'day') {
       const labels = ['12a','4a','8a','12p','4p','8p'];
       const today  = daysAgo(0, tz);
       barData = labels.map((label, i) => {
         const startH = i * 4;
-        const mins   = sessions
+        const mins   = completed
           .filter(s => s.dateStr === today && s.startedAt)
           .filter(s => { const h = toUserDate(s.startedAt, tz).hour; return h >= startH && h < startH + 4; })
           .reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
@@ -89,7 +91,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
       barData = Array.from({ length: 7 }, (_, i) => {
         const ds  = daysAgo(6 - i, tz);
         const dow = weekdayOfDateStr(ds);
-        const mins = sessions.filter(s => s.dateStr === ds)
+        const mins = completed.filter(s => s.dateStr === ds)
           .reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
         return { label: DAY[dow], minutes: mins };
       });
@@ -97,7 +99,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
       const today = daysAgo(0, tz);
       barData = Array.from({ length: 4 }, (_, i) => {
         const hi = (3 - i) * 7, lo = hi + 7;
-        const mins = sessions.filter(s => {
+        const mins = completed.filter(s => {
           const dAgo = diffDays(s.dateStr, today);
           return dAgo >= hi && dAgo < lo;
         }).reduce((a, s) => a + (s.timerState?.actualDuration || 0), 0);
@@ -105,8 +107,10 @@ router.get('/summary', asyncHandler(async (req, res) => {
       });
     }
 
-    // Latest streak from statistics
-    const todayStat = await Statistics.findOne({ userId: req.user._id, dateStr: endStr });
+    // Compute the streak live (with the until-midnight grace) rather than
+    // reading today's stored doc, which wouldn't exist on a still-idle day.
+    const { current: currentStreak, longest: longestStreak } =
+      await Statistics.computeStreak(req.user._id, tz);
 
     res.json({
       period,
@@ -119,8 +123,8 @@ router.get('/summary', asyncHandler(async (req, res) => {
       bestHour,
       healthScore,
       healthBreakdown:   { consistency, completion, volume },
-      currentStreak:     todayStat?.currentStreak ?? 0,
-      longestStreak:     todayStat?.longestStreak  ?? 0,
+      currentStreak,
+      longestStreak,
       barData,
     });
 }));

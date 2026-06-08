@@ -94,7 +94,7 @@ function buildPrompt(profile, tasks = []) {
 
     const taskList = tasks.length > 0
         ? tasks.map(t => `  - ${t.name} (priority: ${t.priority})`).join('\n')
-        : '  (no tasks added — use General Focus)';
+        : '  (no tasks added ï¿½ use General Focus)';
 
     return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
 
@@ -210,7 +210,7 @@ export async function getOrGenerateInsight(userId, { force = false } = {}) {
     const insight = await AIInsight.findOneAndUpdate(
         { userId },
         { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
     );
 
     return { insight, cached: false };
