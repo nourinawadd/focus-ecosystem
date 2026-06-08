@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform,
-  Alert, Animated, Modal, Easing,
+  Alert, Animated, Modal, Easing, AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
@@ -53,8 +53,12 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
 
   const startedAt      = useRef(new Date());
   const sessionIdRef   = useRef<string | null>(null);
-  const focusSecsRef   = useRef(0);
   const shieldAppliedRef = useRef(false);
+
+  // Wall-clock timer anchoring — so backgrounding can't freeze the countdown.
+  const deadlineRef      = useRef(0);                   // ms timestamp the phase ends
+  const focusAccumRef    = useRef(0);                   // committed focus seconds
+  const focusRunStartRef = useRef<number | null>(null); // start of the live focus run
 
   const phaseRef = useRef(phase);
   const roundRef = useRef(round);
@@ -144,18 +148,101 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       Animated.timing(tickAnim, { toValue: 1,     duration: 180, useNativeDriver: true }),
     ]).start();
 
+  // Total focus seconds = banked runs + the in-flight run (if currently focusing).
+  const commitFocus = () => {
+    if (focusRunStartRef.current != null) {
+      focusAccumRef.current += (Date.now() - focusRunStartRef.current) / 1000;
+      focusRunStartRef.current = null;
+    }
+  };
+  const focusElapsedSecs = () => {
+    const live = focusRunStartRef.current != null ? (Date.now() - focusRunStartRef.current) / 1000 : 0;
+    return Math.round(focusAccumRef.current + live);
+  };
+
+  // Catch up the Pomodoro state when one or more phase deadlines passed while
+  // backgrounded — a long absence can skip a whole focus+break (or more), not
+  // just one phase. Walks forward through phases consuming the overflow, banking
+  // focus time for the ended/skipped focus phases, and lands on the right
+  // phase/round/remaining (or finishes). Returns true if it advanced the state.
+  const reconcilePomodoro = () => {
+    let over = (Date.now() - deadlineRef.current) / 1000;
+    if (over <= 0) return false;                 // current phase still running
+
+    // The current phase fully elapsed. If it was focus, bank it up to its end
+    // (not up to now — the overflow belongs to later phases) and close the run.
+    if (phaseRef.current === 'focus' && focusRunStartRef.current != null) {
+      focusAccumRef.current += Math.min(FOCUS_SECS, (deadlineRef.current - focusRunStartRef.current) / 1000);
+      focusRunStartRef.current = null;
+    }
+
+    let p = phaseRef.current;
+    let r = roundRef.current;
+    for (;;) {
+      if (p === 'focus') {
+        p = 'break';                             // focus → break
+        if (over < BREAK_SECS) break;
+        over -= BREAK_SECS;                      // break fully skipped (not focus, not banked)
+      } else {
+        if (r + 1 > maxRounds) {                 // break → done
+          setRunning(false);
+          setRemaining(0);
+          return true;
+        }
+        r += 1;
+        p = 'focus';                             // break → next round's focus
+        if (over < FOCUS_SECS) {
+          focusAccumRef.current += over;         // landed mid-focus: bank elapsed part
+          break;                                 // the live run (set by the timer effect) covers the rest
+        }
+        focusAccumRef.current += FOCUS_SECS;     // focus phase fully skipped → counts in full
+        over -= FOCUS_SECS;
+      }
+    }
+
+    const landedDur = p === 'focus' ? FOCUS_SECS : BREAK_SECS;
+    setPhase(p);
+    setRound(r);
+    setRemaining(Math.max(1, Math.round(landedDur - over)));
+    return true;
+  };
+
+  // Drive the countdown from a wall-clock deadline rather than counting ticks.
+  // setInterval is suspended while the app is backgrounded, so tick-counting
+  // would freeze and undercount. Anchoring to Date.now() means the timer
+  // reflects real elapsed time the moment we recompute (next tick / foreground).
   useEffect(() => {
     if (!running) return;
+    deadlineRef.current = Date.now() + remaining * 1000;
+    if (phase === 'focus') focusRunStartRef.current = Date.now();
     const id = setInterval(() => {
-      if (phaseRef.current === 'focus') focusSecsRef.current += 1;
+      const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
       setRemaining(prev => {
-        if (prev <= 1) { clearInterval(id); return 0; }
-        pulseTick();
-        return prev - 1;
+        if (left < prev) pulseTick();
+        return left;
       });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [running, phase]);
+      if (left <= 0) clearInterval(id);
+    }, 250);
+    // Cleanup ends the active segment (pause / phase change / unmount): stop the
+    // ticker and bank the focus time accrued during it.
+    return () => { clearInterval(id); commitFocus(); };
+  // `round` is included so a catch-up that lands on the same phase value (e.g.
+  // focus→break→focus) still re-anchors the deadline for the new phase.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, phase, round]);
+
+  // Snap the timer to real elapsed time the instant we return to foreground
+  // (don't wait for the next tick). For Pomodoro, reconcile any phases that
+  // elapsed while away; otherwise just recompute remaining (0 → complete).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !running) return;
+      if (isPomo && reconcilePomodoro()) return;
+      setRemaining(Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000)));
+    });
+    return () => sub.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   useEffect(() => {
     if (remaining !== 0) return;
@@ -181,7 +268,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       clearScreenTimeShield().catch(() => {});
       shieldAppliedRef.current = false;
     }
-    const elapsed         = focusSecsRef.current;
+    const elapsed         = focusElapsedSecs();
     const actualMinutes   = Math.max(1, Math.round(elapsed / 60));
     const completionRatio = Math.min(1, elapsed / Math.max(1, totalSecs));
     const distractionsVal = Math.max(
