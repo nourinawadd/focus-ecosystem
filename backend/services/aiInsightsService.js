@@ -91,6 +91,7 @@ async function buildUserProfile(userId) {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 function buildPrompt(profile, tasks = []) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -99,6 +100,11 @@ function buildPrompt(profile, tasks = []) {
         : '  (no tasks added � use General Focus)';
 
     return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
+=======
+function buildPrompt(profile) {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
 =======
 function buildPrompt(profile) {
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -205,17 +211,23 @@ export async function getOrGenerateInsight(userId, { force = false } = {}) {
   const validated = validateAndClamp(aiResponse);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     const insight = await AIInsight.findOneAndUpdate(
         { userId },
         { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
         { upsert: true, returnDocument: 'after' },
     );
 =======
+=======
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
   const insight = await AIInsight.findOneAndUpdate(
     { userId },
     { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
     { upsert: true, new: true },
   );
+<<<<<<< HEAD
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
+=======
 >>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
   return { insight, cached: false };

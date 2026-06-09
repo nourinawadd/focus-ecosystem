@@ -23,6 +23,9 @@ import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import errorHandler    from './middleware/errorHandler.js';
 import aiRoutes        from './routes/ai.js';
+<<<<<<< HEAD
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
+=======
 >>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
 // ─── Fail fast on misconfiguration ──────────────────────────────────────────
