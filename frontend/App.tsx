@@ -136,10 +136,14 @@ export default function App() {
 
   // Handle taps on push notifications — navigate to Dashboard for any type.
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseListener(() => {
+    const addNotificationResponseListener =
+      (Notifications as any).addNotificationResponseReceivedListener ??
+      (Notifications as any).addNotificationResponseListener;
+
+    const sub = addNotificationResponseListener?.(() => {
       navigate('Dashboard');
     });
-    return () => sub.remove();
+    return () => sub?.remove?.();
   }, [navigate]);
 
   const refreshSessions = useCallback(() => {
