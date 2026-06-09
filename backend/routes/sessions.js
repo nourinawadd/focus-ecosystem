@@ -2,12 +2,14 @@ import express from 'express';
 import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import Statistics from '../models/Statistics.js';
+import User from '../models/User.js';
 import auth from '../middleware/auth.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 import {
   requireObjectId, requireInt, requireEnum, requireString, requireDateStr, badRequest,
 } from '../middleware/validate.js';
 import { invalidateSuggestion } from '../services/aiSuggestionService.js';
+import { sendPush } from '../utils/push.js';
 
 const router = express.Router();
 
@@ -176,8 +178,41 @@ router.patch('/:id/end', asyncHandler(async (req, res) => {
     metadata:  { reason: finalStatus },
   });
 
-  const tz         = req.user.settings?.timezone || 'UTC';
+  const tz = req.user.settings?.timezone || 'UTC';
+
+  // Snapshot today's minutes before rebuilding so we can detect the goal crossing.
+  const prevStat = await Statistics.findOne(
+    { userId: req.user._id, dateStr: updated.dateStr },
+    { totalFocusMinutes: 1 },
+  );
+  const prevMinutes = prevStat?.totalFocusMinutes ?? 0;
+
   const streakData = await syncStats(req.user._id, updated.dateStr, tz);
+
+  // Goal-achieved push — fires once when the session that crosses the daily goal completes.
+  if (
+    finalStatus === 'COMPLETED' &&
+    req.user.settings?.notificationsEnabled &&
+    req.user.settings?.notify?.goalAchieved &&
+    req.user.pushTokens?.length
+  ) {
+    const goal = req.user.settings.dailyGoalMinutes ?? 120;
+    const afterStat = await Statistics.findOne(
+      { userId: req.user._id, dateStr: updated.dateStr },
+      { totalFocusMinutes: 1 },
+    );
+    const nextMinutes = afterStat?.totalFocusMinutes ?? 0;
+    if (prevMinutes < goal && nextMinutes >= goal) {
+      const dead = await sendPush(req.user.pushTokens, {
+        title: 'Daily goal achieved! 🎉',
+        body:  `You hit your ${goal}-minute focus goal for today. Keep it up!`,
+        data:  { type: 'GOAL_ACHIEVED' },
+      });
+      if (dead.length) {
+        await User.findByIdAndUpdate(req.user._id, { $pull: { pushTokens: { $in: dead } } });
+      }
+    }
+  }
 
   invalidateSuggestion(req.user._id);
 
