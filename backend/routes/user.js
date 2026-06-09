@@ -1,4 +1,5 @@
 import express from 'express';
+import { Expo } from 'expo-server-sdk';
 import User from '../models/User.js';
 import NFCTag from '../models/NFCTag.js';
 import UserTag from '../models/UserTag.js';
@@ -24,10 +25,21 @@ const SETTING_VALIDATORS = {
   dailyGoalMinutes:     v => requireInt(v, { min: 0, max: 1440, field: 'dailyGoalMinutes' }),
   weeklyGoalMinutes:    v => requireInt(v, { min: 0, max: 10080, field: 'weeklyGoalMinutes' }),
   notificationsEnabled: v => requireBool(v, { field: 'notificationsEnabled' }),
+  reminderHour:         v => requireInt(v, { min: 0, max: 23, field: 'reminderHour' }),
   timezone: (v) => {
     if (!isValidTimezone(v)) throw badRequest('timezone must be a valid IANA timezone');
     return v;
   },
+};
+
+// Validators for the nested settings.notify sub-document.
+const NOTIFY_VALIDATORS = {
+  dailyNudge:      v => requireBool(v, { field: 'notify.dailyNudge' }),
+  inSessionAlerts: v => requireBool(v, { field: 'notify.inSessionAlerts' }),
+  dailySummary:    v => requireBool(v, { field: 'notify.dailySummary' }),
+  streakAlert:     v => requireBool(v, { field: 'notify.streakAlert' }),
+  goalNudge:       v => requireBool(v, { field: 'notify.goalNudge' }),
+  goalAchieved:    v => requireBool(v, { field: 'notify.goalAchieved' }),
 };
 
 // ─── GET /api/user/me ─────────────────────────────────────────────────────────
@@ -40,6 +52,13 @@ router.patch('/settings', asyncHandler(async (req, res) => {
   for (const [key, validate] of Object.entries(SETTING_VALIDATORS)) {
     if (req.body[key] !== undefined) updates[`settings.${key}`] = validate(req.body[key]);
   }
+  if (req.body.notify != null && typeof req.body.notify === 'object') {
+    for (const [key, validate] of Object.entries(NOTIFY_VALIDATORS)) {
+      if (req.body.notify[key] !== undefined) {
+        updates[`settings.notify.${key}`] = validate(req.body.notify[key]);
+      }
+    }
+  }
   if (!Object.keys(updates).length)
     return res.status(400).json({ message: 'No valid settings fields provided' });
 
@@ -49,6 +68,28 @@ router.patch('/settings', asyncHandler(async (req, res) => {
     { returnDocument: 'after', runValidators: true },
   );
   res.json(user);
+}));
+
+// ─── POST /api/user/push-token ────────────────────────────────────────────────
+// Body: { token: string } — registers an Expo push token for this device.
+router.post('/push-token', asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  if (!token || typeof token !== 'string' || !Expo.isExpoPushToken(token)) {
+    return res.status(400).json({ message: 'Invalid Expo push token' });
+  }
+  await User.findByIdAndUpdate(req.user._id, { $addToSet: { pushTokens: token } });
+  res.json({ ok: true });
+}));
+
+// ─── DELETE /api/user/push-token ─────────────────────────────────────────────
+// Body: { token: string } — removes a push token on sign-out or permission revoke.
+router.delete('/push-token', asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ message: 'token is required' });
+  }
+  await User.findByIdAndUpdate(req.user._id, { $pull: { pushTokens: token } });
+  res.json({ ok: true });
 }));
 
 // ─── GET /api/user/nfc-tags ───────────────────────────────────────────────────

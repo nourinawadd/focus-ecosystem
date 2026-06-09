@@ -23,6 +23,7 @@ import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
 import { registerForPush, unregisterPush } from './notifications';
+import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
   | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
@@ -133,6 +134,14 @@ export default function App() {
     registerForPush().catch(console.error);
   }, [token]);
 
+  // Handle taps on push notifications — navigate to Dashboard for any type.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseListener(() => {
+      navigate('Dashboard');
+    });
+    return () => sub.remove();
+  }, [navigate]);
+
   const refreshSessions = useCallback(() => {
     if (!token) return;
     apiFetch<SessionRecord[]>('/sessions', token)
@@ -176,6 +185,15 @@ export default function App() {
         preferredDuration:    me.settings?.defaultDuration       ?? 25,
         pomodoroEnabled:      me.settings?.defaultTimerMode === 'POMODORO',
         notificationsEnabled: me.settings?.notificationsEnabled  ?? true,
+        reminderHour:         me.settings?.reminderHour          ?? 20,
+        notify: {
+          dailyNudge:      me.settings?.notify?.dailyNudge      ?? true,
+          inSessionAlerts: me.settings?.notify?.inSessionAlerts ?? true,
+          dailySummary:    me.settings?.notify?.dailySummary    ?? true,
+          streakAlert:     me.settings?.notify?.streakAlert     ?? true,
+          goalNudge:       me.settings?.notify?.goalNudge       ?? true,
+          goalAchieved:    me.settings?.notify?.goalAchieved    ?? true,
+        },
       }))
       .catch((e: any) => {
         if (e?.status === 401) signOut();

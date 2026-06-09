@@ -46,7 +46,9 @@
       "Bash(git status *)",
       "Bash(xargs -0 -I{} du -m \"{}\")",
       "Bash(awk '$1>=2{print $0}')",
-      "Bash(awk '{print $1}')"
+      "Bash(awk '{print $1}')",
+      "Bash(eas --version)",
+      "Bash(npm test *)"
     ]
   }
 }

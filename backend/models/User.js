@@ -1,6 +1,15 @@
 import mongoose from 'mongoose';
 import bcrypt   from 'bcryptjs'; 
 
+const NotifySchema = new mongoose.Schema({
+  dailyNudge:      { type: Boolean, default: true },
+  inSessionAlerts: { type: Boolean, default: true },
+  dailySummary:    { type: Boolean, default: true },
+  streakAlert:     { type: Boolean, default: true },
+  goalNudge:       { type: Boolean, default: true },
+  goalAchieved:    { type: Boolean, default: true },
+}, { _id: false });
+
 const SettingsSchema = new mongoose.Schema({
   defaultSessionType: {
     type:    String,
@@ -12,13 +21,15 @@ const SettingsSchema = new mongoose.Schema({
     enum:    ['COUNTDOWN', 'POMODORO', 'STOPWATCH'],
     default: 'COUNTDOWN',
   },
-  defaultDuration: { type: Number, default: 45 }, 
+  defaultDuration: { type: Number, default: 45 },
   pomodoroWork:    { type: Number, default: 25 },
-  pomodoroBreak:   { type: Number, default: 5  }, 
+  pomodoroBreak:   { type: Number, default: 5  },
   dailyGoalMinutes:  { type: Number, default: 120 },
   weeklyGoalMinutes: { type: Number, default: 600 },
 
   notificationsEnabled: { type: Boolean, default: true },
+  reminderHour:         { type: Number, default: 20 },
+  notify:               { type: NotifySchema, default: () => ({}) },
 
   // IANA timezone (e.g. "Europe/Istanbul"). Drives all server-side
   // hour-of-day / "today" calculations. Defaults to UTC.
@@ -41,6 +52,15 @@ const UserSchema = new mongoose.Schema({
   appleId:      { type: String, index: { unique: true, sparse: true } },
 
   settings:     { type: SettingsSchema, default: () => ({}) },
+  pushTokens:   { type: [String], default: [] },
+  notifyState: {
+    type: new mongoose.Schema({
+      summaryDateStr: { type: String, default: '' },
+      streakDateStr:  { type: String, default: '' },
+      goalDateStr:    { type: String, default: '' },
+    }, { _id: false }),
+    default: () => ({}),
+  },
 }, {
   timestamps: true,
 });

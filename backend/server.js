@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createApp } from './app.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import logger from './utils/logger.js';
+import { startNotificationCron } from './jobs/notificationCron.js';
 
 // ─── Fail fast on misconfiguration ──────────────────────────────────────────
 // Better to crash on boot than to run with a weak/absent secret or open CORS.
@@ -20,6 +21,7 @@ const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
+    startNotificationCron();
     const server = app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
 
     // Graceful shutdown: stop accepting connections, drain in-flight requests,

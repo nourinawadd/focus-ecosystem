@@ -17,6 +17,15 @@ export type UserProfile = {
 
   // ── Preferences ───────────────────────────────────────────────────────────
   notificationsEnabled: boolean;
+  reminderHour: number;
+  notify: {
+    dailyNudge:      boolean;
+    inSessionAlerts: boolean;
+    dailySummary:    boolean;
+    streakAlert:     boolean;
+    goalNudge:       boolean;
+    goalAchieved:    boolean;
+  };
 };
 
 export const DEFAULT_USER: UserProfile = {
@@ -27,6 +36,15 @@ export const DEFAULT_USER: UserProfile = {
   preferredDuration: 25,
   pomodoroEnabled: false,
   notificationsEnabled: true,
+  reminderHour: 20,
+  notify: {
+    dailyNudge:      true,
+    inSessionAlerts: true,
+    dailySummary:    true,
+    streakAlert:     true,
+    goalNudge:       true,
+    goalAchieved:    true,
+  },
 };
 
 // ─── NFC tag types ────────────────────────────────────────────────────────────

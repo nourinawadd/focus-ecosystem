@@ -18,7 +18,9 @@ export async function connectDB() {
   mongoose.connection.on('error',        (err) => logger.error({ err }, 'MongoDB error'));
   mongoose.connection.on('disconnected', ()    => logger.warn('MongoDB disconnected'));
 
-  await mongoose.connect(process.env.MONGO_URI, OPTIONS);
+  const uri = new URL(process.env.MONGO_URI);
+  uri.pathname = '/Anchor';
+  await mongoose.connect(uri.toString(), OPTIONS);
   logger.info('MongoDB connected');
   return mongoose.connection;
 }
