@@ -1,94 +1,96 @@
 import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import AIInsight from '../models/AIInsight.js';
-import Task from '../models/Task.js';
 import { generateJSON, isGeminiConfigured, INSIGHT_SCHEMA } from '../config/gemini.js';
 
 const CACHE_HOURS = 6;
 const MIN_SESSIONS = 3;
 
 function clampNumber(n, min, max, fallback) {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return fallback;
-    return Math.max(min, Math.min(max, x));
+  const x = Number(n);
+  if (!Number.isFinite(x)) return fallback;
+  return Math.max(min, Math.min(max, x));
 }
 
 function clampString(s, max, fallback = '') {
-    if (typeof s !== 'string') return fallback;
-    return s.slice(0, max);
+  if (typeof s !== 'string') return fallback;
+  return s.slice(0, max);
 }
 
 async function buildUserProfile(userId) {
-    const since = new Date();
-    since.setDate(since.getDate() - 30);
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
 
-    const sessions = await Session.find({
-        userId,
-        status: 'COMPLETED',
-        startedAt: { $gte: since },
-    }).lean();
+  const sessions = await Session.find({
+    userId,
+    status: 'COMPLETED',
+    startedAt: { $gte: since },
+  }).lean();
 
-    if (sessions.length < MIN_SESSIONS) {
-        return { enoughData: false, sessionCount: sessions.length };
+  if (sessions.length < MIN_SESSIONS) {
+    return { enoughData: false, sessionCount: sessions.length };
+  }
+
+  // Hourly distribution (0-23)
+  const hourly = Array(24).fill(0);
+  const weekday = [0, 0, 0, 0, 0, 0, 0]; // Sun..Sat minutes
+
+  let totalMinutes = 0;
+  let totalScore = 0;
+  let scoreCount = 0;
+  let pomodoroCount = 0;
+  let countdownCount = 0;
+
+  for (const s of sessions) {
+    const start = new Date(s.startedAt);
+    const h = start.getHours();
+    const dow = start.getDay();
+    const mins = s.timerState?.actualDuration || s.timerConfig?.plannedDuration || 0;
+
+    hourly[h] += mins;
+    weekday[dow] += mins;
+    totalMinutes += mins;
+
+    if (typeof s.focusScore === 'number') {
+      totalScore += s.focusScore;
+      scoreCount++;
     }
 
-    const hourly = Array(24).fill(0);
-    const weekday = [0, 0, 0, 0, 0, 0, 0];
+    if (s.timerMode === 'POMODORO') pomodoroCount++;
+    else countdownCount++;
+  }
 
-    let totalMinutes = 0;
-    let totalScore = 0;
-    let scoreCount = 0;
-    let pomodoroCount = 0;
-    let countdownCount = 0;
+  // Top distractions from focus logs
+  const logs = await FocusLog.find({
+    userId,
+    event: { $in: ['APP_BLOCKED', 'DISTRACTION'] },
+    timestamp: { $gte: since },
+  }).lean();
 
-    for (const s of sessions) {
-        const start = new Date(s.startedAt);
-        const h = start.getHours();
-        const dow = start.getDay();
-        const mins = s.timerState?.actualDuration || s.timerConfig?.plannedDuration || 0;
+  const distractionMap = {};
+  for (const l of logs) {
+    const app = l.metadata?.appName || l.metadata?.packageName || 'unknown';
+    distractionMap[app] = (distractionMap[app] || 0) + 1;
+  }
+  const topDistractions = Object.entries(distractionMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({ name, count }));
 
-        hourly[h] += mins;
-        weekday[dow] += mins;
-        totalMinutes += mins;
-
-        if (typeof s.focusScore === 'number') {
-            totalScore += s.focusScore;
-            scoreCount++;
-        }
-
-        if (s.timerMode === 'POMODORO') pomodoroCount++;
-        else countdownCount++;
-    }
-
-    const logs = await FocusLog.find({
-        userId,
-        event: { $in: ['APP_BLOCKED', 'DISTRACTION'] },
-        timestamp: { $gte: since },
-    }).lean();
-
-    const distractionMap = {};
-    for (const l of logs) {
-        const app = l.metadata?.appName || l.metadata?.packageName || 'unknown';
-        distractionMap[app] = (distractionMap[app] || 0) + 1;
-    }
-    const topDistractions = Object.entries(distractionMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, count]) => ({ name, count }));
-
-    return {
-        enoughData: true,
-        sessionCount: sessions.length,
-        totalMinutes,
-        avgScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : null,
-        hourly,
-        weekday,
-        pomodoroCount,
-        countdownCount,
-        topDistractions,
-    };
+  return {
+    enoughData: true,
+    sessionCount: sessions.length,
+    totalMinutes,
+    avgScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : null,
+    hourly,
+    weekday,
+    pomodoroCount,
+    countdownCount,
+    topDistractions,
+  };
 }
 
+<<<<<<< HEAD
 function buildPrompt(profile, tasks = []) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -97,6 +99,11 @@ function buildPrompt(profile, tasks = []) {
         : '  (no tasks added � use General Focus)';
 
     return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
+=======
+function buildPrompt(profile) {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
 USER PROFILE:
 - Total completed sessions: ${profile.sessionCount}
@@ -104,9 +111,6 @@ USER PROFILE:
 - Average focus score: ${profile.avgScore ?? 'N/A'}/100
 - Pomodoro sessions: ${profile.pomodoroCount}
 - Countdown sessions: ${profile.countdownCount}
-
-TASKS TO SCHEDULE (ordered by priority):
-${taskList}
 
 HOURLY ACTIVITY (minutes focused per hour of day, 0-23):
 ${profile.hourly.map((m, h) => `  ${String(h).padStart(2, '0')}:00 -> ${m} min`).join('\n')}
@@ -116,102 +120,103 @@ ${profile.weekday.map((m, i) => `  ${dayNames[i]}: ${m} min`).join('\n')}
 
 TOP DISTRACTIONS:
 ${profile.topDistractions.length > 0
-            ? profile.topDistractions.map(d => `  - ${d.name}: ${d.count} times`).join('\n')
-            : '  (none recorded)'}
+  ? profile.topDistractions.map(d => `  - ${d.name}: ${d.count} times`).join('\n')
+  : '  (none recorded)'}
 
 Based on this data, return ONLY a JSON object with this exact shape (no markdown, no commentary):
 {
   "bestProductiveHour": <integer 0-23>,
   "optimalDuration": <integer minutes, 15-120>,
   "suggestedSchedule": [
-    { "day": "<day name>", "startHour": <0-23>, "durationMinutes": <integer>, "confidence": <0-1 float>, "task": "<task name from list or General Focus>" }
+    { "day": "<day name>", "startHour": <0-23>, "durationMinutes": <integer>, "confidence": <0-1 float> }
   ],
   "distractionRisk": {
     "score": <integer 0-100>,
     "level": "<low|medium|high>",
     "factors": ["<short factor 1>", "<short factor 2>"]
   },
-  "insightText": "<2-3 sentence personalized insight mentioning tasks>"
+  "insightText": "<2-3 sentence personalized insight>"
 }
 
-Rules:
-- High priority tasks get the best (peak) time slots
-- Medium priority tasks get good but not peak slots
-- Low priority tasks get remaining slots
-- Return 7 entries covering all days of the week
-- Match tasks to days based on user most active hours
-- Keep insightText under 280 characters.`;
+Return between 2 and 5 schedule entries. Keep insightText under 280 characters.`;
 }
 
 function validateAndClamp(ai) {
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    const bestProductiveHour = clampNumber(ai.bestProductiveHour, 0, 23, 9);
-    const optimalDuration = clampNumber(ai.optimalDuration, 15, 120, 25);
+  const bestProductiveHour = clampNumber(ai.bestProductiveHour, 0, 23, 9);
+  const optimalDuration = clampNumber(ai.optimalDuration, 15, 120, 25);
 
-    let schedule = [];
-    if (Array.isArray(ai.suggestedSchedule)) {
-        schedule = ai.suggestedSchedule.slice(0, 7).map(s => ({
-            day: dayNames.includes(s.day) ? s.day : 'Monday',
-            startHour: clampNumber(s.startHour, 0, 23, 9),
-            durationMinutes: clampNumber(s.durationMinutes, 15, 120, 25),
-            confidence: clampNumber(s.confidence, 0, 1, 0.5),
-            subject: typeof s.subject === 'string' ? s.subject.slice(0, 100) : 'General Focus',
-        }));
-    }
+  let schedule = [];
+  if (Array.isArray(ai.suggestedSchedule)) {
+    schedule = ai.suggestedSchedule.slice(0, 5).map(s => ({
+      day: dayNames.includes(s.day) ? s.day : 'Monday',
+      startHour: clampNumber(s.startHour, 0, 23, 9),
+      durationMinutes: clampNumber(s.durationMinutes, 15, 120, 25),
+      confidence: clampNumber(s.confidence, 0, 1, 0.5),
+    }));
+  }
 
-    const risk = ai.distractionRisk || {};
-    const validLevels = ['low', 'medium', 'high'];
-    const rawLevel = typeof risk.level === 'string' ? risk.level.toLowerCase() : '';
-    const normalizedLevel = validLevels.includes(rawLevel) ? rawLevel : 'medium';
-    const distractionRisk = {
-        score: clampNumber(risk.score, 0, 100, 50),
-        level: normalizedLevel,
-        factors: Array.isArray(risk.factors)
-            ? risk.factors.slice(0, 5).map(f => clampString(f, 100))
-            : [],
-    };
+  const risk = ai.distractionRisk || {};
+  const validLevels = ['low', 'medium', 'high'];
+  const rawLevel = typeof risk.level === 'string' ? risk.level.toLowerCase() : '';
+  const normalizedLevel = validLevels.includes(rawLevel) ? rawLevel : 'medium';
+  const distractionRisk = {
+    score: clampNumber(risk.score, 0, 100, 50),
+    level: normalizedLevel.charAt(0).toUpperCase() + normalizedLevel.slice(1),
+    factors: Array.isArray(risk.factors)
+      ? risk.factors.slice(0, 5).map(f => clampString(f, 100))
+      : [],
+  };
 
-    const insightText = clampString(ai.insightText, 500, 'Keep up the focus work!');
+  const insightText = clampString(ai.insightText, 500, 'Keep up the focus work!');
 
-    return { bestProductiveHour, optimalDuration, suggestedSchedule: schedule, distractionRisk, insightText };
+  return { bestProductiveHour, optimalDuration, suggestedSchedule: schedule, distractionRisk, insightText };
 }
 
 export async function getOrGenerateInsight(userId, { force = false } = {}) {
-    if (!isGeminiConfigured()) {
-        const err = new Error('AI service not configured');
-        err.code = 'NO_API_KEY';
-        throw err;
-    }
+  if (!isGeminiConfigured()) {
+    const err = new Error('AI service not configured');
+    err.code = 'NO_API_KEY';
+    throw err;
+  }
 
-    if (!force) {
-        const existing = await AIInsight.findOne({ userId }).sort({ generatedAt: -1 });
-        if (existing) {
-            const ageHours = (Date.now() - new Date(existing.generatedAt).getTime()) / 3600000;
-            if (ageHours < CACHE_HOURS) {
-                return { insight: existing, cached: true };
-            }
-        }
+  // Check cache
+  if (!force) {
+    const existing = await AIInsight.findOne({ userId }).sort({ generatedAt: -1 });
+    if (existing) {
+      const ageHours = (Date.now() - new Date(existing.generatedAt).getTime()) / 3600000;
+      if (ageHours < CACHE_HOURS) {
+        return { insight: existing, cached: true };
+      }
     }
+  }
 
-    const profile = await buildUserProfile(userId);
-    if (!profile.enoughData) {
-        const err = new Error(`Need at least ${MIN_SESSIONS} completed sessions (have ${profile.sessionCount})`);
-        err.code = 'NOT_ENOUGH_DATA';
-        err.sessionCount = profile.sessionCount;
-        throw err;
-    }
+  const profile = await buildUserProfile(userId);
+  if (!profile.enoughData) {
+    const err = new Error(`Need at least ${MIN_SESSIONS} completed sessions (have ${profile.sessionCount})`);
+    err.code = 'NOT_ENOUGH_DATA';
+    err.sessionCount = profile.sessionCount;
+    throw err;
+  }
 
-    const tasks = await Task.find({ userId }).sort({ createdAt: 1 }).lean();
-    const prompt = buildPrompt(profile, tasks);
+  const prompt = buildPrompt(profile);
     const aiResponse = await generateJSON(prompt, INSIGHT_SCHEMA);
-    const validated = validateAndClamp(aiResponse);
+  const validated = validateAndClamp(aiResponse);
 
+<<<<<<< HEAD
     const insight = await AIInsight.findOneAndUpdate(
         { userId },
         { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
         { upsert: true, returnDocument: 'after' },
     );
+=======
+  const insight = await AIInsight.findOneAndUpdate(
+    { userId },
+    { $set: { ...validated, trainingSize: profile.sessionCount, generatedAt: new Date() } },
+    { upsert: true, new: true },
+  );
+>>>>>>> parent of 54a5bc9 (cont:add tasks management)
 
-    return { insight, cached: false };
+  return { insight, cached: false };
 }
