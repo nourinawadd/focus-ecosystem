@@ -1,7 +1,10 @@
 // frontend/screens/SettingsScreen.tsx
 // User preferences. Every change is immediately synced to PATCH /user/settings.
-import React from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform,
+  Modal, TextInput, ActivityIndicator, Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
@@ -70,6 +73,8 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
     if (updates.preferredDuration   !== undefined) backendUpdates.defaultDuration     = updates.preferredDuration;
     if (updates.pomodoroEnabled     !== undefined) backendUpdates.defaultTimerMode    = updates.pomodoroEnabled ? 'POMODORO' : 'COUNTDOWN';
     if (updates.notificationsEnabled !== undefined) backendUpdates.notificationsEnabled = updates.notificationsEnabled;
+    if (updates.reminderHour         !== undefined) backendUpdates.reminderHour         = updates.reminderHour;
+    if (updates.notify               !== undefined) backendUpdates.notify               = updates.notify;
 
     try {
       await apiFetch('/user/settings', token, {
@@ -149,11 +154,81 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
       <View style={s.card}>
         <ToggleRow
           label="Notifications"
-          desc="Session reminders and completion alerts"
+          desc="Master switch — enables all notification types"
           value={user.notificationsEnabled}
-          onChange={v => updateAndSync({ notificationsEnabled: v })}
+          onChange={v => {
+            updateAndSync({ notificationsEnabled: v });
+            if (v && user.notify.dailyNudge) scheduleDailyNudge(user.reminderHour);
+            else cancelDailyNudge();
+          }}
         />
       </View>
+
+      {user.notificationsEnabled && (<>
+        <Text style={s.sectionLabel}>NOTIFICATION TYPES</Text>
+        <View style={s.card}>
+          <ToggleRow
+            label="Daily start nudge"
+            desc="Local reminder at your chosen time each day"
+            value={user.notify.dailyNudge}
+            onChange={v => {
+              const notify = { ...user.notify, dailyNudge: v };
+              updateAndSync({ notify });
+              if (v) scheduleDailyNudge(user.reminderHour);
+              else cancelDailyNudge();
+            }}
+          />
+          <ToggleRow
+            label="In-session phase alerts"
+            desc="Pomodoro focus↔break boundaries and session complete"
+            value={user.notify.inSessionAlerts}
+            onChange={v => updateAndSync({ notify: { ...user.notify, inSessionAlerts: v } })}
+          />
+          <ToggleRow
+            label="Daily summary"
+            desc="Your focus minutes, sessions, and score for the day"
+            value={user.notify.dailySummary}
+            onChange={v => updateAndSync({ notify: { ...user.notify, dailySummary: v } })}
+          />
+          <ToggleRow
+            label="Streak at risk"
+            desc="Alert at 9 PM if you haven't focused yet today"
+            value={user.notify.streakAlert}
+            onChange={v => updateAndSync({ notify: { ...user.notify, streakAlert: v } })}
+          />
+          <ToggleRow
+            label="Goal progress nudge"
+            desc="Reminder when you're partway to your daily goal"
+            value={user.notify.goalNudge}
+            onChange={v => updateAndSync({ notify: { ...user.notify, goalNudge: v } })}
+          />
+          <ToggleRow
+            label="Goal achieved"
+            desc="Celebration when you hit your daily focus goal"
+            value={user.notify.goalAchieved}
+            onChange={v => updateAndSync({ notify: { ...user.notify, goalAchieved: v } })}
+          />
+        </View>
+
+        {user.notify.dailyNudge && (
+          <View style={s.selectCard}>
+            <Text style={s.rowLabel}>Reminder time</Text>
+            <Text style={s.rowDesc}>Hour of day to receive the daily start nudge</Text>
+            <ChipRow
+              options={[17, 18, 19, 20, 21, 22] as number[]}
+              active={user.reminderHour}
+              onSelect={v => {
+                updateAndSync({ reminderHour: v });
+                if (user.notify.dailyNudge) scheduleDailyNudge(v);
+              }}
+              labelOf={v => {
+                const h = v % 12 || 12;
+                return `${h} ${v < 12 ? 'AM' : 'PM'}`;
+              }}
+            />
+          </View>
+        )}
+      </>)}
 
       <Text style={s.sectionLabel}>CONNECTED HARDWARE</Text>
       <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.75}>
