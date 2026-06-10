@@ -62,17 +62,21 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
 // Create a new session (ACTIVE state) when the user taps "Start".
-// Body: { type, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid? }
+// Body: { categoryId, customName, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid? }
 router.post('/', asyncHandler(async (req, res) => {
-  const { type, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid } = req.body;
+  const { categoryId, customName, timerMode, timerConfig, blockedApps, dateStr, startedAt, nfcTagUid } = req.body;
 
   requireDateStr(dateStr);
+  const categoryIdStr = requireString(categoryId, { field: 'categoryId' });
+  const customNameStr = customName ? requireString(customName, { max: 100, field: 'customName' }) : 'Untitled';
+  
   if (!timerConfig || typeof timerConfig !== 'object')
     throw badRequest('timerConfig is required');
 
-  const finalType = type === undefined
-    ? 'STUDY'
-    : requireEnum(type, ['STUDY', 'WORK', 'CUSTOM'], { field: 'type' });
+  // Validate that the category exists for this user
+  const category = req.user.categories?.find(c => c.id === categoryIdStr);
+  if (!category) throw badRequest('Invalid categoryId');
+
   const finalMode = timerMode === undefined
     ? 'COUNTDOWN'
     : requireEnum(timerMode, ['COUNTDOWN', 'POMODORO', 'STOPWATCH'], { field: 'timerMode' });
@@ -92,7 +96,8 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const session = await Session.create({
     userId:      req.user._id,
-    type:        finalType,
+    categoryId:  categoryIdStr,
+    customName:  customNameStr,
     status:      'ACTIVE',
     timerMode:   finalMode,
     timerConfig: { plannedDuration, pomodoroWork, pomodoroBreak, pomodoroRounds },

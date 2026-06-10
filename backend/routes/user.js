@@ -152,4 +152,89 @@ router.post('/nfc-verify', asyncHandler(async (req, res) => {
   res.json({ valid: !!userTag, tag: userTag || null });
 }));
 
+// ─── GET /api/user/categories ────────────────────────────────────────────────
+// Returns all session categories for the user.
+router.get('/categories', asyncHandler(async (req, res) => {
+  res.json(req.user.categories || []);
+}));
+
+// ─── POST /api/user/categories ────────────────────────────────────────────────
+// Body: { name: string } — creates a new session category.
+router.post('/categories', asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    throw badRequest('name is required and must be a non-empty string');
+  }
+  const trimmedName = name.trim();
+  if (trimmedName.length > 100) {
+    throw badRequest('name must be at most 100 characters');
+  }
+
+  // Generate a unique ID for this category (using timestamp + random)
+  const categoryId = `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  const updated = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $push: {
+        categories: {
+          id: categoryId,
+          name: trimmedName,
+          createdAt: new Date(),
+        },
+      },
+    },
+    { returnDocument: 'after' },
+  );
+
+  const newCategory = updated.categories.find(c => c.id === categoryId);
+  res.status(201).json(newCategory);
+}));
+
+// ─── PATCH /api/user/categories/:categoryId ──────────────────────────────────
+// Body: { name: string } — renames a category.
+router.patch('/categories/:categoryId', asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
+  const { name } = req.body;
+
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    throw badRequest('name is required and must be a non-empty string');
+  }
+  const trimmedName = name.trim();
+  if (trimmedName.length > 100) {
+    throw badRequest('name must be at most 100 characters');
+  }
+
+  const updated = await User.findOneAndUpdate(
+    { _id: req.user._id, 'categories.id': categoryId },
+    { $set: { 'categories.$.name': trimmedName } },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) {
+    return res.status(404).json({ message: 'Category not found' });
+  }
+
+  const category = updated.categories.find(c => c.id === categoryId);
+  res.json(category);
+}));
+
+// ─── DELETE /api/user/categories/:categoryId ────────────────────────────────
+// Deletes a category.
+router.delete('/categories/:categoryId', asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
+
+  const updated = await User.findByIdAndUpdate(
+    req.user._id,
+    { $pull: { categories: { id: categoryId } } },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated || !updated.categories.length) {
+    return res.status(404).json({ message: 'Category not found or user has no categories' });
+  }
+
+  res.json({ ok: true });
+}));
+
 export default router;

@@ -34,11 +34,10 @@ function arcColor(p: number) {
 type NfcModalPhase = 'scanning' | 'unregistered';
 
 export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
-  const totalSecs   = parseInt(nav.params.duration      ?? '45') * 60;
+  const totalSecs   = parseInt(nav.params.plannedDuration ?? '45') * 60;
   const isPomo      = nav.params.pomodoro === 'true';
   const pomoWork    = parseInt(nav.params.pomodoroWork  ?? '25');
   const pomoBreak   = parseInt(nav.params.pomodoroBreak ?? '5');
-  const sessionType = nav.params.type ?? 'Study';
   const blockedApps = (nav.params.blockedApps ?? '').split(',').filter(Boolean);
 
   const FOCUS_SECS = isPomo ? pomoWork  * 60 : totalSecs;
@@ -103,10 +102,11 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     apiFetch<{ id: string }>('/sessions', nav.token, {
       method: 'POST',
       body: JSON.stringify({
-        type:        sessionType.toUpperCase(),
+        categoryId:   nav.params.categoryId || 'uncategorized',
+        customName:   nav.params.customName || 'Untitled',
         timerMode:   isPomo ? 'POMODORO' : 'COUNTDOWN',
         timerConfig: {
-          plannedDuration: parseInt(nav.params.duration ?? '45'),
+          plannedDuration: parseInt(nav.params.plannedDuration ?? '45'),
           pomodoroWork:    pomoWork,
           pomodoroBreak:   pomoBreak,
         },

@@ -10,12 +10,13 @@ const NotifySchema = new mongoose.Schema({
   goalAchieved:    { type: Boolean, default: true },
 }, { _id: false });
 
+const CategorySchema = new mongoose.Schema({
+  id:   { type: String, required: true },  // unique within user
+  name: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const SettingsSchema = new mongoose.Schema({
-  defaultSessionType: {
-    type:    String,
-    enum:    ['STUDY', 'WORK', 'CUSTOM'],
-    default: 'STUDY',
-  },
   defaultTimerMode: {
     type:    String,
     enum:    ['COUNTDOWN', 'POMODORO', 'STOPWATCH'],
@@ -50,6 +51,9 @@ const UserSchema = new mongoose.Schema({
   // without the field (e.g. password-only users) don't collide on null.
   googleId:     { type: String, index: { unique: true, sparse: true } },
   appleId:      { type: String, index: { unique: true, sparse: true } },
+
+  // User-defined session categories (e.g. 'Work', 'Fitness', 'Reading')
+  categories:   { type: [CategorySchema], default: () => ([]) },
 
   settings:     { type: SettingsSchema, default: () => ({}) },
   pushTokens:   { type: [String], default: [] },

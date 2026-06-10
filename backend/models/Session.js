@@ -21,10 +21,16 @@ const SessionSchema = new mongoose.Schema({
     index:    true,
   },
 
-  type: {
-    type:    String,
-    enum:    ['STUDY', 'WORK', 'CUSTOM'],
-    default: 'STUDY',
+  // categoryId references the user's custom category (stored in User.categories)
+  categoryId: {
+    type: String,
+    required: true,
+  },
+  
+  // Custom name given to this session by the user
+  customName: {
+    type: String,
+    default: 'Untitled',
   },
   status: {
     type:    String,
@@ -58,12 +64,10 @@ SessionSchema.statics.toFrontendRecord = function (doc) {
     ? `${String(doc.endedAt.getHours()).padStart(2,'0')}:${String(doc.endedAt.getMinutes()).padStart(2,'0')}`
     : '';
 
-  const typeMap = { STUDY: 'Study', WORK: 'Work', CUSTOM: 'Custom' };
-
   return {
     id:         doc._id.toString(),
-    title:      `${typeMap[doc.type] || doc.type} Session`,
-    type:       typeMap[doc.type] || doc.type,
+    title:      doc.customName || 'Untitled',
+    categoryId: doc.categoryId,
     duration:   doc.timerState?.actualDuration || doc.timerConfig?.plannedDuration || 0,
     startTime:  start,
     endTime:    end,

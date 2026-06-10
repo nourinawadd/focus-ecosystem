@@ -2,17 +2,23 @@
 // Single source of truth consumed by HistoryScreen, DashboardScreen,
 // ActiveSessionScreen, and SessionCompleteScreen.
 
-// ─── Type ─────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 export type SessionRecord = {
   id: string;
-  title: string;        // e.g. "Study Session"
-  type: string;         // e.g. "Study" | "Work" | "Custom"
+  title: string;        // custom name given by user
+  categoryId: string;   // reference to the category
   duration: number;     // actual elapsed minutes
   startTime: string;    // "HH:MM"
   endTime: string;      // "HH:MM"
   focusScore: number | null;
   completed: boolean;
   dateStr: string;      // "YYYY-MM-DD"  (local time, no UTC shift)
+};
+
+export type SessionCategory = {
+  id: string;
+  name: string;
+  createdAt: string;
 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────

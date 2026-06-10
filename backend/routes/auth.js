@@ -96,11 +96,20 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, emailVe
 
   // 3. Create a new account (no password — social-only).
   const fallbackName = name || (email ? email.split('@')[0] : '') || 'Anchor User';
+  
+  // Create default categories for new social users
+  const defaultCategories = [
+    { id: `cat_${Date.now()}_work`, name: 'Work' },
+    { id: `cat_${Date.now()}_personal`, name: 'Personal' },
+    { id: `cat_${Date.now()}_learning`, name: 'Learning' },
+  ];
+  
   try {
     return await User.create({
       [idField]: providerUserId,
       email:     email ?? undefined,
       name:      fallbackName,
+      categories: defaultCategories,
     });
   } catch (err) {
     if (err.code === 11000) {
@@ -133,7 +142,19 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
   if (await User.findOne({ email }))
     return res.status(409).json({ message: 'Email already registered' });
 
-  const user = await User.create({ name, email, passwordHash: password });
+  // Create default categories for new users
+  const defaultCategories = [
+    { id: `cat_${Date.now()}_work`, name: 'Work' },
+    { id: `cat_${Date.now()}_personal`, name: 'Personal' },
+    { id: `cat_${Date.now()}_learning`, name: 'Learning' },
+  ];
+
+  const user = await User.create({
+    name,
+    email,
+    passwordHash: password,
+    categories: defaultCategories,
+  });
   res.status(201).json(await issueTokens(user, req));
 }));
 

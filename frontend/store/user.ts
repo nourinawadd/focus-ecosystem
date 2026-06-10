@@ -2,6 +2,12 @@
 // Single source of truth for the authenticated user.
 // Read from nav.user; update via nav.updateUser() anywhere in the app.
 
+export type SessionCategory = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
 export type UserProfile = {
   name: string;
   email: string;
@@ -14,6 +20,9 @@ export type UserProfile = {
   // ── Session defaults (pre-fill CreateSession screen) ─────────────────────
   preferredDuration: number;   // minutes, e.g. 25
   pomodoroEnabled: boolean;    // pre-check the Pomodoro toggle
+
+  // ── Session categories ─────────────────────────────────────────────────────
+  categories: SessionCategory[];
 
   // ── Preferences ───────────────────────────────────────────────────────────
   notificationsEnabled: boolean;
@@ -35,6 +44,7 @@ export const DEFAULT_USER: UserProfile = {
   weeklyGoalMinutes: 600,
   preferredDuration: 25,
   pomodoroEnabled: false,
+  categories: [],
   notificationsEnabled: true,
   reminderHour: 20,
   notify: {

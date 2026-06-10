@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Switch, StyleSheet, Platform, Alert,
+  Switch, StyleSheet, Platform, Alert, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
+import { apiFetch } from '../api/client';
+import { SessionCategory } from '../store/user';
 import {
   isSupported as screenTimeSupported,
   isNativeReady as screenTimeNativeReady,
@@ -22,7 +24,6 @@ import {
   type ScreenTimeAuthStatus,
 } from 'anchor-screen-time';
 
-const SESSION_TYPES = ['Study', 'Work', 'Custom'] as const;
 const DURATIONS = [15, 25, 30, 45, 60, 90];
 const APPS = ['Instagram', 'Twitter', 'TikTok', 'YouTube', 'Reddit', 'Snapchat', 'Discord', 'Games'];
 
@@ -34,9 +35,15 @@ const POMO_PRESETS = [
 ] as const;
 
 type PomoPreset = typeof POMO_PRESETS[number];
+type ScreenState = 'category-select' | 'session-create';
 
 export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
-  const [sessionType, setSessionType] = useState<string>('Study');
+  const [screenState, setScreenState] = useState<ScreenState>('category-select');
+  const [categories, setCategories] = useState<SessionCategory[]>(nav.user.categories || []);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<SessionCategory | null>(null);
+  const [sessionName, setSessionName] = useState('');
+
   const [duration, setDuration] = useState(() =>
     DURATIONS.includes(nav.user.preferredDuration) ? nav.user.preferredDuration : 25,
   );
@@ -48,6 +55,12 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [stSummary, setStSummary]   = useState<ScreenTimeSelectionSummary | null>(null);
   const [stStatus,  setStStatus]    = useState<ScreenTimeAuthStatus>('notDetermined');
   const [stBusy,    setStBusy]      = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  // Load categories on mount
+  useEffect(() => {
+    refreshCategories();
+  }, []);
 
   useEffect(() => {
     if (!screenTimeNativeReady()) return;
@@ -59,11 +72,49 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         setStStatus(status);
         setStSummary(summary);
       } catch {
-        // ignore — surface in the configure flow
+        // ignore
       }
     })();
     return () => { alive = false; };
   }, []);
+
+  const refreshCategories = useCallback(async () => {
+    try {
+      const cats = await apiFetch<SessionCategory[]>('/user/categories');
+      setCategories(cats);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+  }, []);
+
+  const createNewCategory = async () => {
+    if (!newCategoryName.trim()) {
+      Alert.alert('Error', 'Please enter a category name');
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    try {
+      const newCat = await apiFetch<SessionCategory>('/user/categories', {
+        method: 'POST',
+        body: { name: newCategoryName },
+      });
+      setCategories(prev => [...prev, newCat]);
+      setNewCategoryName('');
+      setSelectedCategory(newCat);
+      setScreenState('session-create');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to create category');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const selectCategory = (cat: SessionCategory) => {
+    setSelectedCategory(cat);
+    setScreenState('session-create');
+    setSessionName('');
+  };
 
   const configureScreenTime = async () => {
     if (!screenTimeSupported()) return;
@@ -97,26 +148,90 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     }
   };
 
-  const pomoDuration = pomoPreset.work * pomoRounds;
-
   const toggleApp = (app: string) =>
     setBlockedApps(prev => prev.includes(app) ? prev.filter(a => a !== app) : [...prev, app]);
 
   const visibleApps = showAllApps ? APPS : APPS.slice(0, 5);
+  const pomoDuration = pomoPreset.work * pomoRounds;
 
-  const startParams = {
-    type:          sessionType,
-    duration:      String(pomodoro ? pomoDuration : duration),
+  const startParams = selectedCategory ? {
+    categoryId:    selectedCategory.id,
+    customName:    sessionName || 'Untitled',
+    timerMode:     'COUNTDOWN',
+    plannedDuration: String(pomodoro ? pomoDuration : duration),
     pomodoro:      String(pomodoro),
     pomodoroWork:  String(pomoPreset.work),
     pomodoroBreak: String(pomoPreset.brk),
     blockedApps:   blockedApps.join(','),
-  };
+  } : null;
+
+  if (screenState === 'category-select') {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => nav.navigate('Dashboard')}>
+            <Ionicons name="arrow-back" size={24} color={colors.ink} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Session Categories</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <SectionLabel noTopMargin>Your Categories</SectionLabel>
+          
+          {categories.length === 0 ? (
+            <Text style={styles.emptyText}>No categories yet. Create one to get started!</Text>
+          ) : (
+            <View style={styles.categoryGrid}>
+              {categories.map(cat => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.categoryCard}
+                  onPress={() => selectCategory(cat)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="folder" size={32} color={colors.ink} />
+                  <Text style={styles.categoryName}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <SectionLabel>Create New Category</SectionLabel>
+          <Card style={styles.createCard} padding={spacing.md}>
+            <TextInput
+              style={styles.input}
+              placeholder="Category name (e.g., Work, Fitness, Learning)"
+              placeholderTextColor={colors.muted}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              editable={!isCreatingCategory}
+              maxLength={100}
+            />
+            <TouchableOpacity
+              style={[styles.createBtn, isCreatingCategory && styles.createBtnDisabled]}
+              onPress={createNewCategory}
+              disabled={isCreatingCategory}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.createBtnText}>
+                {isCreatingCategory ? 'Creating...' : 'Create Category'}
+              </Text>
+            </TouchableOpacity>
+          </Card>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (!selectedCategory) return null;
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => nav.navigate('Dashboard')}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setScreenState('category-select')}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>New Session</Text>
@@ -124,21 +239,23 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        
+        {/* Category badge */}
+        <Card style={styles.categoryBadge} padding={spacing.md}>
+          <Ionicons name="folder" size={20} color={colors.ink} />
+          <Text style={styles.categoryBadgeText}>{selectedCategory.name}</Text>
+        </Card>
 
-        {/* Session Type */}
-        <SectionLabel noTopMargin>Session Type</SectionLabel>
-        <View style={styles.typeRow}>
-          {SESSION_TYPES.map(t => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.typePill, sessionType === t && styles.typePillActive]}
-              onPress={() => setSessionType(t)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.typePillText, sessionType === t && styles.typePillTextActive]}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Session name input */}
+        <SectionLabel>Session Name</SectionLabel>
+        <TextInput
+          style={styles.sessionNameInput}
+          placeholder="e.g., Morning Work Session"
+          placeholderTextColor={colors.muted}
+          value={sessionName}
+          onChangeText={setSessionName}
+          maxLength={100}
+        />
 
         {/* Duration (non-Pomodoro) OR Preset + Total Duration (Pomodoro) */}
         {!pomodoro ? (
@@ -263,16 +380,28 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         {/* Actions */}
         {nav.userTags.length > 0 ? (
           <>
-            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('NFCScan', startParams)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.nfcBtn}
+              onPress={() => startParams && nav.navigate('NFCScan', startParams)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.nfcBtnText}>Scan NFC Tag to Start</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.skipBtn}
+              onPress={() => startParams && nav.navigate('ActiveSession', startParams)}
+              activeOpacity={0.7}
+            >
               <Text style={styles.skipBtnText}>Start Without NFC</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
-            <TouchableOpacity style={styles.nfcBtn} onPress={() => nav.navigate('ActiveSession', startParams)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.nfcBtn}
+              onPress={() => startParams && nav.navigate('ActiveSession', startParams)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.nfcBtnText}>Start Session</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.7}>
@@ -299,11 +428,51 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 40 },
   body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
 
-  typeRow:            { flexDirection: 'row', gap: spacing.sm + 2 },
-  typePill:           { paddingVertical: 10, paddingHorizontal: 22, borderRadius: radii.full, backgroundColor: colors.border },
-  typePillActive:     { backgroundColor: colors.ink },
-  typePillText:       { fontSize: fontSize.sm + 1, fontWeight: '600', color: colors.inkSoft },
-  typePillTextActive: { color: colors.white },
+  emptyText: { fontSize: fontSize.md, color: colors.muted, textAlign: 'center', marginTop: spacing.lg },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
+  categoryCard: {
+    flex: 0.45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.border,
+    borderRadius: radii.lg,
+  },
+  categoryName: { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginTop: spacing.sm },
+
+  createCard: { marginBottom: spacing.lg },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    marginBottom: spacing.md,
+  },
+  createBtn: {
+    backgroundColor: colors.ink,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  createBtnDisabled: { opacity: 0.6 },
+  createBtnText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+
+  categoryBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  categoryBadgeText: { fontSize: fontSize.lg - 1, fontWeight: '600', color: colors.ink },
+
+  sessionNameInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    marginBottom: spacing.md,
+  },
 
   durationBig:  { fontSize: 60, fontWeight: '700', color: colors.ink, textAlign: 'center', marginVertical: 6 },
   durationUnit: { fontSize: 22, fontWeight: '400', color: colors.muted },
