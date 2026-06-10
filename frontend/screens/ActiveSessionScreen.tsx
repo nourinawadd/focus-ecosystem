@@ -316,6 +316,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       Math.max(20, Math.round(completionRatio * 80) + pomoBon - penalty + 12),
     );
     const endedAt = new Date();
+    const finalStatus = remaining === 0 ? 'COMPLETED' : 'ABANDONED';
 
     let finalScore = score;
     let streak     = '0';
@@ -326,7 +327,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
           `/sessions/${sessionIdRef.current}/end`, nav.token, {
             method: 'PATCH',
             body: JSON.stringify({
-              status:           'COMPLETED',
+              status:           finalStatus,
               timerState:       { actualDuration: actualMinutes },
               focusScore:       score,
               distractionCount: distractionsVal,
