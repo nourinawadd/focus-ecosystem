@@ -56,6 +56,10 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [stStatus,  setStStatus]    = useState<ScreenTimeAuthStatus>('notDetermined');
   const [stBusy,    setStBusy]      = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   // Load categories on mount
   useEffect(() => {
@@ -121,6 +125,77 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
     setSelectedCategory(cat);
     setScreenState('session-create');
     setSessionName('');
+  };
+
+  const startEditCategory = (cat: SessionCategory) => {
+    setEditingCategoryId(cat.id);
+    setEditCategoryName(cat.name);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditCategoryName('');
+  };
+
+  const saveEditCategory = async (cat: SessionCategory) => {
+    const trimmed = editCategoryName.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Please enter a category name');
+      return;
+    }
+    if (trimmed === cat.name) {
+      cancelEditCategory();
+      return;
+    }
+
+    setIsSavingCategory(true);
+    try {
+      const updated = await apiFetch<SessionCategory>(`/user/categories/${cat.id}`, nav.token, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const updatedCategories = categories.map(c => c.id === cat.id ? updated : c);
+      setCategories(updatedCategories);
+      nav.updateUser({ categories: updatedCategories });
+      if (selectedCategory?.id === cat.id) setSelectedCategory(updated);
+      cancelEditCategory();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to rename category');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const deleteCategory = (cat: SessionCategory) => {
+    Alert.alert(
+      'Delete category',
+      `Delete "${cat.name}"? Past sessions will keep this category.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingCategoryId(cat.id);
+            try {
+              await apiFetch(`/user/categories/${cat.id}`, nav.token, { method: 'DELETE' });
+              const updatedCategories = categories.filter(c => c.id !== cat.id);
+              setCategories(updatedCategories);
+              nav.updateUser({ categories: updatedCategories });
+              if (selectedCategory?.id === cat.id) {
+                setSelectedCategory(null);
+                setScreenState('category-select');
+              }
+              if (editingCategoryId === cat.id) cancelEditCategory();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete category');
+            } finally {
+              setDeletingCategoryId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const configureScreenTime = async () => {
@@ -191,15 +266,66 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           ) : (
             <View style={styles.categoryGrid}>
               {categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={styles.categoryCard}
-                  onPress={() => selectCategory(cat)}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons name="folder" size={32} color={colors.ink} />
-                  <Text style={styles.categoryName}>{cat.name}</Text>
-                </TouchableOpacity>
+                <View key={cat.id} style={styles.categoryCard}>
+                  {editingCategoryId === cat.id ? (
+                    <View style={styles.categoryEditWrap}>
+                      <TextInput
+                        style={styles.categoryEditInput}
+                        value={editCategoryName}
+                        onChangeText={setEditCategoryName}
+                        autoFocus
+                        maxLength={100}
+                        editable={!isSavingCategory}
+                      />
+                      <View style={styles.categoryEditActions}>
+                        <TouchableOpacity
+                          style={styles.categoryEditBtn}
+                          onPress={() => saveEditCategory(cat)}
+                          disabled={isSavingCategory}
+                          hitSlop={8}
+                        >
+                          <Ionicons name="checkmark" size={20} color={colors.success} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.categoryEditBtn}
+                          onPress={cancelEditCategory}
+                          disabled={isSavingCategory}
+                          hitSlop={8}
+                        >
+                          <Ionicons name="close" size={20} color={colors.muted} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.categoryCardActions}>
+                        <TouchableOpacity
+                          style={styles.categoryCardActionBtn}
+                          onPress={() => startEditCategory(cat)}
+                          hitSlop={8}
+                        >
+                          <Ionicons name="pencil" size={15} color={colors.muted} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.categoryCardActionBtn}
+                          onPress={() => deleteCategory(cat)}
+                          disabled={deletingCategoryId === cat.id}
+                          hitSlop={8}
+                        >
+                          <Ionicons name="trash" size={15} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.categoryCardBody}
+                        onPress={() => selectCategory(cat)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name="folder" size={32} color={colors.ink} />
+                        <Text style={styles.categoryName}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
               ))}
             </View>
           )}
@@ -443,13 +569,36 @@ const styles = StyleSheet.create({
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
   categoryCard: {
     flex: 0.45,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
     backgroundColor: colors.border,
     borderRadius: radii.lg,
   },
+  categoryCardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  categoryCardActionBtn: { padding: spacing.xxs },
+  categoryCardBody: { alignItems: 'center', justifyContent: 'center' },
   categoryName: { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginTop: spacing.sm },
+
+  categoryEditWrap: { alignItems: 'center' },
+  categoryEditInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: colors.ink,
+    borderRadius: radii.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.ink,
+    backgroundColor: colors.card,
+    textAlign: 'center',
+  },
+  categoryEditActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm },
+  categoryEditBtn: { padding: spacing.xs },
 
   createCard: { marginBottom: spacing.lg },
   input: {
