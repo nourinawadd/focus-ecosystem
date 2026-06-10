@@ -298,23 +298,6 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                     </View>
                   ) : (
                     <>
-                      <View style={styles.categoryCardActions}>
-                        <TouchableOpacity
-                          style={styles.categoryCardActionBtn}
-                          onPress={() => startEditCategory(cat)}
-                          hitSlop={8}
-                        >
-                          <Ionicons name="pencil" size={15} color={colors.muted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.categoryCardActionBtn}
-                          onPress={() => deleteCategory(cat)}
-                          disabled={deletingCategoryId === cat.id}
-                          hitSlop={8}
-                        >
-                          <Ionicons name="trash" size={15} color={colors.danger} />
-                        </TouchableOpacity>
-                      </View>
                       <TouchableOpacity
                         style={styles.categoryCardBody}
                         onPress={() => selectCategory(cat)}
@@ -323,6 +306,23 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                         <Ionicons name="folder" size={32} color={colors.ink} />
                         <Text style={styles.categoryName}>{cat.name}</Text>
                       </TouchableOpacity>
+                      <View style={styles.categoryCardActions}>
+                        <TouchableOpacity
+                          style={styles.categoryActionBtn}
+                          onPress={() => startEditCategory(cat)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.categoryActionBtnText}>Rename</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.categoryActionBtn}
+                          onPress={() => deleteCategory(cat)}
+                          disabled={deletingCategoryId === cat.id}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.categoryActionBtnText, styles.categoryActionBtnTextDanger]}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
                     </>
                   )}
                 </View>
@@ -576,11 +576,18 @@ const styles = StyleSheet.create({
   },
   categoryCardActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.md,
-    marginBottom: spacing.xs,
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
-  categoryCardActionBtn: { padding: spacing.xxs },
+  categoryActionBtn: {
+    paddingVertical: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.full,
+    backgroundColor: colors.card,
+  },
+  categoryActionBtnText: { fontSize: fontSize.xs, fontWeight: '600', color: colors.inkSoft },
+  categoryActionBtnTextDanger: { color: colors.danger },
   categoryCardBody: { alignItems: 'center', justifyContent: 'center' },
   categoryName: { fontSize: fontSize.md, fontWeight: '600', color: colors.ink, marginTop: spacing.sm },
 
