@@ -3,6 +3,11 @@ import { Expo } from 'expo-server-sdk';
 import User from '../models/User.js';
 import NFCTag from '../models/NFCTag.js';
 import UserTag from '../models/UserTag.js';
+import Session from '../models/Session.js';
+import FocusLog from '../models/FocusLog.js';
+import Statistics from '../models/Statistics.js';
+import AIInsight from '../models/AIInsight.js';
+import RefreshToken from '../models/RefreshToken.js';
 import auth from '../middleware/auth.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 import {
@@ -90,6 +95,26 @@ router.delete('/push-token', asyncHandler(async (req, res) => {
   }
   await User.findByIdAndUpdate(req.user._id, { $pull: { pushTokens: token } });
   res.json({ ok: true });
+}));
+
+// ─── DELETE /api/user/me ──────────────────────────────────────────────────────
+// Permanently delete the account and every document it owns (App Store
+// requirement: apps with account creation must offer in-app deletion).
+// Global NFCTag records are shared across users and stay; only this user's
+// links to them (UserTag) are removed. The user doc is deleted last so a
+// failure partway leaves the account intact and the deletion retryable.
+router.delete('/me', asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  await Promise.all([
+    Session.deleteMany({ userId }),
+    FocusLog.deleteMany({ userId }),
+    Statistics.deleteMany({ userId }),
+    UserTag.deleteMany({ userId }),
+    AIInsight.deleteMany({ userId }),
+    RefreshToken.deleteMany({ userId }),
+  ]);
+  await User.findByIdAndDelete(userId);
+  res.json({ deleted: true });
 }));
 
 // ─── GET /api/user/nfc-tags ───────────────────────────────────────────────────

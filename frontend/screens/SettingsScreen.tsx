@@ -62,6 +62,26 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   const { user, token } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
+  // Account deletion modal: the button stays disabled until "DELETE" is typed.
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting,    setDeleting]    = useState(false);
+  const deleteArmed = confirmText.trim().toUpperCase() === 'DELETE';
+
+  const deleteAccount = async () => {
+    if (!deleteArmed || !token) return;
+    setDeleting(true);
+    try {
+      await apiFetch('/user/me', token, { method: 'DELETE' });
+      setDeleteModal(false);
+      nav.signOut();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Updates local state instantly and fires a background sync to the backend.
   const updateAndSync = async (updates: Partial<UserProfile>) => {
     nav.updateUser(updates);
@@ -245,7 +265,66 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         </View>
       </TouchableOpacity>
 
+      <Text style={s.sectionLabel}>ACCOUNT</Text>
+      <TouchableOpacity
+        style={s.card}
+        onPress={() => { setConfirmText(''); setDeleteModal(true); }}
+        activeOpacity={0.75}
+      >
+        <View style={s.linkRow}>
+          <View style={s.rowInfo}>
+            <Text style={[s.rowLabel, s.dangerLabel]}>Delete Account</Text>
+            <Text style={s.rowDesc}>Permanently erase your account and all session data</Text>
+          </View>
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+        </View>
+      </TouchableOpacity>
+
       <View style={{ height: 48 }} />
+
+      <Modal
+        visible={deleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModal(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Delete account?</Text>
+            <Text style={s.modalSub}>
+              This permanently erases your account, sessions, statistics, and tags.
+              It cannot be undone. Type DELETE to confirm.
+            </Text>
+            <TextInput
+              style={s.modalInput}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setDeleteModal(false)}
+                disabled={deleting}
+              >
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalDeleteBtn, (!deleteArmed || deleting) && { opacity: 0.45 }]}
+                onPress={deleteAccount}
+                disabled={!deleteArmed || deleting}
+              >
+                {deleting
+                  ? <ActivityIndicator color={colors.white} size="small" />
+                  : <Text style={s.modalDeleteText}>Delete</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -276,4 +355,17 @@ const s = StyleSheet.create({
   chipOn:       { backgroundColor: colors.ink, borderColor: colors.ink },
   chipTxt:      { fontSize: fontSize.sm, color: colors.muted, fontWeight: '500' },
   chipTxtOn:    { color: colors.white, fontWeight: '600' },
+
+  // Account deletion
+  dangerLabel:     { color: colors.danger },
+  modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  modalCard:       { backgroundColor: colors.white, borderRadius: radii.xl, padding: 24, width: '100%', maxWidth: 340 },
+  modalTitle:      { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8 },
+  modalSub:        { fontSize: fontSize.sm, color: colors.muted, lineHeight: 20, marginBottom: 16 },
+  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16, letterSpacing: 2 },
+  modalActions:    { flexDirection: 'row', gap: 12 },
+  modalCancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
+  modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },
+  modalDeleteBtn:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.danger },
+  modalDeleteText: { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
 });

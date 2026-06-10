@@ -170,25 +170,37 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Apply the Screen Time shield on mount; clear on unmount as a safety net.
+  // The shield follows the phase: apps blocked during focus, unblocked during
+  // breaks. Pausing mid-focus keeps the block (a pause is not a break). Round
+  // is a dep so a background catch-up that lands on the same phase value (e.g.
+  // focus→break→focus) still re-asserts the shield on foreground.
   useEffect(() => {
     if (!screenTimeSupported()) return;
     (async () => {
       try {
-        if (await screenTimeHasSelection()) {
-          await applyScreenTimeShield();
-          shieldAppliedRef.current = true;
+        if (phase === 'focus') {
+          if (!shieldAppliedRef.current && await screenTimeHasSelection()) {
+            await applyScreenTimeShield();
+            shieldAppliedRef.current = true;
+          }
+        } else {
+          // Unconditional: a resumed session runs in a fresh process whose ref
+          // is false, but the previous process's shield persists system-wide.
+          await clearScreenTimeShield();
+          shieldAppliedRef.current = false;
         }
       } catch {
         // Authorization revoked or no selection — silently skip, session continues
       }
     })();
-    return () => {
-      if (shieldAppliedRef.current) {
-        clearScreenTimeShield().catch(() => {});
-        shieldAppliedRef.current = false;
-      }
-    };
+  }, [phase, round]);
+
+  // Always lift the shield when the screen unmounts (session ended).
+  useEffect(() => () => {
+    if (shieldAppliedRef.current) {
+      clearScreenTimeShield().catch(() => {});
+      shieldAppliedRef.current = false;
+    }
   }, []);
 
   const tickAnim = useRef(new Animated.Value(1)).current;
