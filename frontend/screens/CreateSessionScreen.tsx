@@ -80,26 +80,33 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
 
   const refreshCategories = useCallback(async () => {
     try {
-      const cats = await apiFetch<SessionCategory[]>('/user/categories');
+      const cats = await apiFetch<SessionCategory[]>('/user/categories', nav.token);
       setCategories(cats);
+      nav.updateUser({ categories: cats });
     } catch (err) {
       console.error('Failed to load categories:', err);
     }
-  }, []);
+  }, [nav.token]);
 
   const createNewCategory = async () => {
     if (!newCategoryName.trim()) {
       Alert.alert('Error', 'Please enter a category name');
       return;
     }
+    if (categories.length >= 3) {
+      Alert.alert('Limit reached', 'You can only have up to 3 categories.');
+      return;
+    }
 
     setIsCreatingCategory(true);
     try {
-      const newCat = await apiFetch<SessionCategory>('/user/categories', {
+      const newCat = await apiFetch<SessionCategory>('/user/categories', nav.token, {
         method: 'POST',
-        body: { name: newCategoryName },
+        body: JSON.stringify({ name: newCategoryName.trim() }),
       });
-      setCategories(prev => [...prev, newCat]);
+      const updatedCategories = [...categories, newCat];
+      setCategories(updatedCategories);
+      nav.updateUser({ categories: updatedCategories });
       setNewCategoryName('');
       setSelectedCategory(newCat);
       setScreenState('session-create');
@@ -198,27 +205,31 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           )}
 
           <SectionLabel>Create New Category</SectionLabel>
-          <Card style={styles.createCard} padding={spacing.md}>
-            <TextInput
-              style={styles.input}
-              placeholder="Category name (e.g., Work, Fitness, Learning)"
-              placeholderTextColor={colors.muted}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              editable={!isCreatingCategory}
-              maxLength={100}
-            />
-            <TouchableOpacity
-              style={[styles.createBtn, isCreatingCategory && styles.createBtnDisabled]}
-              onPress={createNewCategory}
-              disabled={isCreatingCategory}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.createBtnText}>
-                {isCreatingCategory ? 'Creating...' : 'Create Category'}
-              </Text>
-            </TouchableOpacity>
-          </Card>
+          {categories.length >= 3 ? (
+            <Text style={styles.emptyText}>You've reached the maximum of 3 categories.</Text>
+          ) : (
+            <Card style={styles.createCard} padding={spacing.md}>
+              <TextInput
+                style={styles.input}
+                placeholder="Category name (e.g., Work, Fitness, Learning)"
+                placeholderTextColor={colors.muted}
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                editable={!isCreatingCategory}
+                maxLength={100}
+              />
+              <TouchableOpacity
+                style={[styles.createBtn, isCreatingCategory && styles.createBtnDisabled]}
+                onPress={createNewCategory}
+                disabled={isCreatingCategory}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.createBtnText}>
+                  {isCreatingCategory ? 'Creating...' : 'Create Category'}
+                </Text>
+              </TouchableOpacity>
+            </Card>
+          )}
 
           <View style={{ height: 40 }} />
         </ScrollView>

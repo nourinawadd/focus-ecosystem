@@ -169,6 +169,9 @@ router.post('/categories', asyncHandler(async (req, res) => {
   if (trimmedName.length > 100) {
     throw badRequest('name must be at most 100 characters');
   }
+  if ((req.user.categories || []).length >= 3) {
+    throw badRequest('Maximum of 3 categories allowed');
+  }
 
   // Generate a unique ID for this category (using timestamp + random)
   const categoryId = `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
