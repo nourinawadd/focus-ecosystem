@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ENV_URL  = process.env.EXPO_PUBLIC_API_URL;
 const DEV_URL  = 'http://10.0.2.2:5000/api';
-const PROD_URL = 'https://your-production-url/api';
+const PROD_URL = 'https://focus-ecosystem.onrender.com/api';
 
 const BASE = ENV_URL ?? (__DEV__ ? DEV_URL : PROD_URL);
 

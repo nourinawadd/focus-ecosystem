@@ -236,7 +236,7 @@ The application targets students, knowledge workers, and professionals who strug
 - **Graceful Degradation**: Returns stale insight or 204 if API unavailable
 
 ### Cloud & Hosting
-- **Backend**: Deployable to Node.js-compatible platforms (Heroku, AWS EC2, Railway, Fly.io, DigitalOcean, etc.)
+- **Backend**: Render (free tier) — `https://focus-ecosystem.onrender.com`, auto-deploys from `main`
 - **Database**: MongoDB Atlas (cloud) or self-hosted MongoDB
 - **Frontend**: EAS (Expo) for iOS/Android builds
 - **NFC Hardware**: iOS/Android devices with NFC capability
@@ -408,6 +408,19 @@ Statistics.setStreak(userId, dateStr, current, longest)
 
    Server should start on `http://localhost:5000`
 
+### Backend Deployment (Render)
+
+The production backend runs on Render's free tier at **`https://focus-ecosystem.onrender.com`** and auto-deploys on every push to `main`. To recreate the setup:
+
+1. **Render** → New → Web Service → connect the GitHub repo:
+   - Root Directory: `backend`
+   - Build command: `npm install` · Start command: `npm start`
+   - Instance type: Free
+2. **Environment variables** (Render dashboard → Environment): `MONGO_URI`, `JWT_SECRET` (≥ 32 chars), `JWT_REFRESH_SECRET`, `CORS_ORIGINS`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `APPLE_BUNDLE_ID`. Do **not** set `PORT` — Render injects it.
+3. **MongoDB Atlas** → Network Access → allow `0.0.0.0/0` (Render's outbound IPs are dynamic).
+4. **Keep-alive**: a free [UptimeRobot](https://uptimerobot.com) monitor pings `GET /api/health` every 5 minutes. Without it the free instance spins down after ~15 min idle — the next request stalls ~50 s and the in-process notification cron silently stops while asleep.
+5. **Verify**: `GET https://focus-ecosystem.onrender.com/api/health` → `{ "status": "ok", "db": "connected" }`. Note there is no route at `/` — everything lives under `/api`, so "Cannot GET /" in a browser is expected.
+
 ### Frontend Setup
 
 1. **Navigate to frontend**:
@@ -420,10 +433,15 @@ Statistics.setStreak(userId, dateStr, current, longest)
    npm install
    ```
 
-3. **Create `.env` file** (optional, for non-standard base URL):
+3. **Create `.env` file** with the API base URL:
    ```env
-   EXPO_PUBLIC_API_URL=http://10.0.2.2:5000/api
+   # Deployed backend (default for development against production data)
+   EXPO_PUBLIC_API_URL=https://focus-ecosystem.onrender.com/api
+
+   # Or a local backend over LAN (phone and computer on the same Wi-Fi)
+   # EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:5000/api
    ```
+   The value is baked in at bundle time — restart Metro after changing it.
 
 > **⚠️ Do NOT use Expo Go.** Anchor bundles custom native modules (`anchor-screen-time`, NFC, Screen Time / Family Controls) that Expo Go cannot load. You must run against a **development build** (dev client). Expo Go is not a supported option.
 
