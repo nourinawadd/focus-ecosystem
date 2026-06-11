@@ -96,7 +96,14 @@ CORS_ORIGINS=        # required — comma-separated browser origins; server cras
 JWT_EXPIRES_IN=7d   # optional, defaults to 7d
 PORT=5000           # optional, defaults to 5000 (injected automatically on Render)
 
-# AI insights (Gemini)
+# AI insights — primary provider is any OpenAI-compatible endpoint via
+# config/llm.js (GitHub Models by default; LLM_API_KEY is a GitHub fine-grained
+# PAT with the Models: read account permission). Gemini is the automatic
+# fallback when the primary fails or is rate-limited; with LLM_API_KEY unset,
+# all calls go straight to Gemini.
+LLM_API_KEY=
+LLM_BASE_URL=https://models.github.ai/inference   # optional, this is the default
+LLM_MODEL=openai/gpt-4.1-mini                     # optional, this is the default
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 

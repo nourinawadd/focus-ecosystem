@@ -1,7 +1,7 @@
 import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import AIInsight from '../models/AIInsight.js';
-import { generateJSON, isGeminiConfigured, INSIGHT_SCHEMA } from '../config/gemini.js';
+import { generateJSON, isLLMConfigured, INSIGHT_SCHEMA } from '../config/llm.js';
 
 const CACHE_HOURS = 6;
 const MIN_SESSIONS = 3;
@@ -90,7 +90,9 @@ async function buildUserProfile(userId) {
   };
 }
 
-function buildPrompt(profile) {
+// Exported for scripts/ai-eval.mjs, which feeds synthetic profiles through the
+// real prompt + real model to sanity-check answer quality.
+export function buildPrompt(profile) {
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
 
@@ -164,7 +166,7 @@ function validateAndClamp(ai) {
 }
 
 export async function getOrGenerateInsight(userId, { force = false } = {}) {
-  if (!isGeminiConfigured()) {
+  if (!isLLMConfigured()) {
     const err = new Error('AI service not configured');
     err.code = 'NO_API_KEY';
     throw err;

@@ -27,6 +27,7 @@ import analyticsRoutes from './routes/analytics.js';
 import aiRoutes        from './routes/ai.js';
 import errorHandler    from './middleware/errorHandler.js';
 import logger          from './utils/logger.js';
+import { getLLMStatus } from './config/llm.js';
 
 export function createApp() {
   const app = express();
@@ -54,11 +55,14 @@ export function createApp() {
   app.use('/api/ai',        aiRoutes);
 
   // Liveness + readiness: 503 unless the Mongo connection is actually up.
+  // `ai` reports the primary LLM provider (the Gemini fallback hides its
+  // failures from users, so this is where they become visible).
   app.get('/api/health', (_req, res) => {
     const dbUp = mongoose.connection.readyState === 1;
     res.status(dbUp ? 200 : 503).json({
       status: dbUp ? 'ok' : 'degraded',
       db:     dbUp ? 'connected' : 'disconnected',
+      ai:     getLLMStatus(),
       ts:     new Date(),
     });
   });
