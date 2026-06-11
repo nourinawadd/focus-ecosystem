@@ -19,6 +19,12 @@ import {
   applyShield as applyScreenTimeShield,
   clearShield as clearScreenTimeShield,
 } from 'anchor-screen-time';
+import {
+  isSupported as liveActivitySupported,
+  startActivity as startLiveActivity,
+  updateActivity as updateLiveActivity,
+  endActivity as endLiveActivity,
+} from 'anchor-live-activity';
 
 function fmt(secs: number) {
   const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -204,6 +210,26 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
     }
   }, []);
 
+  // Live Activity (Lock Screen / Dynamic Island timer): started once per mount
+  // — which covers resumes too, since a resumed session re-mounts this screen —
+  // and ended on unmount. The countdown ticks natively off endDateMs; the sync
+  // effect below only sends updates at phase/round/pause transitions.
+  useEffect(() => {
+    if (!liveActivitySupported() || initialState.remaining <= 0) return;
+    startLiveActivity({
+      sessionName,
+      isPomo,
+      maxRounds,
+      phase:         initialState.phase,
+      round:         initialState.round,
+      endDateMs:     Date.now() + initialState.remaining * 1000,
+      paused:        false,
+      remainingSecs: initialState.remaining,
+    }).catch(() => {});
+    return () => { endLiveActivity().catch(() => {}); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const tickAnim = useRef(new Animated.Value(1)).current;
   const pulseTick = () =>
     Animated.sequence([
@@ -326,6 +352,24 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // Cancel any pending phase alert when leaving the screen (session ended/unmounted).
   useEffect(() => () => { cancelSessionAlert(); }, []);
 
+  // Keep the Live Activity in sync at every phase/round/pause transition — the
+  // same triggers that reschedule the local notification above. The timer
+  // effect re-anchors deadlineRef first (declared earlier with the same deps),
+  // so a running update always carries a fresh deadline. Pausing — and
+  // completion, which lands here as running=false with remaining 0 — freezes
+  // the widget on remainingSecs.
+  useEffect(() => {
+    if (!liveActivitySupported()) return;
+    updateLiveActivity({
+      phase,
+      round,
+      endDateMs:     running ? deadlineRef.current : Date.now() + remaining * 1000,
+      paused:        !running,
+      remainingSecs: remaining,
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, phase, round]);
+
   // Snap the timer to real elapsed time the instant we return to foreground
   // (don't wait for the next tick). For Pomodoro, reconcile any phases that
   // elapsed while away; otherwise just recompute remaining (0 → complete).
@@ -359,6 +403,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
 
   // Core end logic — called after NFC scan (with uid) or directly (without).
   const doEnd = async (nfcTagUid: string | null) => {
+    endLiveActivity().catch(() => {});
     if (shieldAppliedRef.current) {
       clearScreenTimeShield().catch(() => {});
       shieldAppliedRef.current = false;

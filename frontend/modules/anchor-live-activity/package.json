@@ -1,0 +1,8 @@
+{
+  "name": "anchor-live-activity",
+  "version": "0.1.0",
+  "description": "Local Expo module wrapping ActivityKit Live Activities for the focus-session Lock Screen / Dynamic Island timer.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true
+}

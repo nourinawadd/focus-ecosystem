@@ -18,9 +18,11 @@
       "bundleIdentifier": "dev.gradproject.anchor",
       "infoPlist": {
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
-        "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions."
+        "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions.",
+        "NSSupportsLiveActivities": true,
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "34",
+      "buildNumber": "37",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -46,7 +48,17 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.0"
+            "deploymentTarget": "16.0",
+            "extraPods": [
+              {
+                "name": "GoogleUtilities",
+                "modular_headers": true
+              },
+              {
+                "name": "RecaptchaInterop",
+                "modular_headers": true
+              }
+            ]
           }
         }
       ],
@@ -67,12 +79,30 @@
         {
           "color": "#ffffff"
         }
+      ],
+      [
+        "@bacons/apple-targets",
+        {
+          "appleTeamId": "SGMRDRZ92B"
+        }
       ]
     ],
     "owner": "maro2233",
     "extra": {
       "eas": {
-        "projectId": "12d77c6e-1eaa-40f9-8915-f4aef923b60b"
+        "projectId": "12d77c6e-1eaa-40f9-8915-f4aef923b60b",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "dev.gradproject.anchor.widget",
+                  "targetName": "AnchorWidget"
+                }
+              ]
+            }
+          }
+        }
       }
     }
   }

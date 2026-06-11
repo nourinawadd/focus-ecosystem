@@ -1,0 +1,40 @@
+# When this file exists, EAS CLI uses it INSTEAD of .gitignore to decide what
+# gets uploaded to the build workers — every exclusion must be re-stated here.
+#
+# The key line is frontend/ios/: iOS prebuild cannot run on Windows (the Expo
+# CLI hard-skips it), so the EAS macOS worker must run prebuild itself. It only
+# does that when the upload contains no ios/ folder — otherwise config plugins
+# (@bacons/apple-targets → widget target, entitlements, Info.plist) never run.
+
+# dependencies
+node_modules/
+
+# secrets / env files (backend/.env holds MONGO_URI, JWT_SECRET, API keys)
+.env
+.env.*
+*.pem
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+backend/test-ai.ps1
+
+# backend isn't part of the app build
+backend/
+
+# native folders — regenerated on the EAS worker from app.json (CNG)
+frontend/ios/
+frontend/android/
+
+# Expo / Metro artifacts
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# misc
+*.log
+.DS_Store
+notes.md
