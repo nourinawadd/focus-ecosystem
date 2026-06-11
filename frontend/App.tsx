@@ -8,6 +8,7 @@ import { View, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -27,7 +28,7 @@ import { isSupported as screenTimeSupported, clearShield as clearScreenTimeShiel
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
+  | 'SignUp' | 'Login' | 'VerifyEmail' | 'Dashboard' | 'Profile' | 'Settings'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
 
@@ -53,7 +54,7 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
 export default function App() {
@@ -322,6 +323,7 @@ export default function App() {
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
         {current === 'Login'           && <LoginScreen nav={nav} />}
+        {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}
         {current === 'Settings'        && <SettingsScreen nav={nav} />}

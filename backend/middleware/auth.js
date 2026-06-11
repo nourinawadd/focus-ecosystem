@@ -10,7 +10,7 @@ export default async function auth(req, res, next) {
   const token = header.slice('Bearer '.length).trim();
   try {
     const { id } = verify(token);
-    req.user = await User.findById(id).select('-passwordHash');
+    req.user = await User.findById(id).select('-passwordHash -verification');
     if (!req.user) return res.status(401).json({ message: 'User not found' });
     next();
   } catch {

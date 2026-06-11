@@ -35,12 +35,22 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
     if (!validate() || loading) return;
     setLoading(true);
     try {
-      const { accessToken, refreshToken, user } = await apiFetch<{
-        accessToken: string; refreshToken: string; user: any;
+      const res = await apiFetch<{
+        accessToken?: string; refreshToken?: string; user?: any;
+        verificationRequired?: boolean; email?: string;
       }>(
         '/auth/register', null,
         { method: 'POST', body: JSON.stringify({ name: name.trim(), email, password }) },
       );
+      // Backend with email verification enabled returns no tokens — the user
+      // exchanges the emailed code for them on the verification screen.
+      if (res.verificationRequired) {
+        nav.replace('VerifyEmail', { email: res.email ?? email });
+        return;
+      }
+      const { accessToken, refreshToken, user } = res as {
+        accessToken: string; refreshToken: string; user: any;
+      };
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
       nav.updateUser({ name: user.name, email: user.email });

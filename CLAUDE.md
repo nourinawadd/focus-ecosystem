@@ -100,6 +100,13 @@ PORT=5000           # optional, defaults to 5000 (injected automatically on Rend
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 
+# Email verification (Brevo) — REQUIRE_EMAIL_VERIFICATION=true makes /register
+# create unverified accounts that must redeem a 6-digit emailed code via
+# /api/auth/verify-email before login works. Unset locally/tests: classic flow.
+REQUIRE_EMAIL_VERIFICATION=true
+BREVO_API_KEY=
+BREVO_SENDER=anchorr26@gmail.com   # must be a Brevo-verified sender
+
 # Social sign-in (Google/Apple) — required for /api/auth/google and /api/auth/apple
 GOOGLE_WEB_CLIENT_ID=    # OAuth Web client ID; the audience of the native SDK's idToken
 GOOGLE_IOS_CLIENT_ID=    # OAuth iOS client ID; also accepted as a valid audience

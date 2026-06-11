@@ -53,6 +53,21 @@ const UserSchema = new mongoose.Schema({
 
   settings:     { type: SettingsSchema, default: () => ({}) },
   pushTokens:   { type: [String], default: [] },
+
+  // Default true so accounts created before this feature (and social accounts,
+  // whose email the provider already verified) hydrate as verified with no
+  // migration. /register sets false explicitly when verification is required.
+  emailVerified: { type: Boolean, default: true },
+  verification: {
+    type: new mongoose.Schema({
+      codeHash:   { type: String, default: null },  // bcrypt hash of the 6-digit code
+      expiresAt:  { type: Date,   default: null },
+      attempts:   { type: Number, default: 0 },     // failed tries; locks at max
+      lastSentAt: { type: Date,   default: null },  // resend cooldown anchor
+    }, { _id: false }),
+    default: () => ({}),
+  },
+
   notifyState: {
     type: new mongoose.Schema({
       summaryDateStr: { type: String, default: '' },
@@ -81,6 +96,7 @@ UserSchema.methods.comparePassword = function (candidate) {
 UserSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.passwordHash;
+  delete obj.verification;   // never expose the code hash / attempt state
   return obj;
 };
 
