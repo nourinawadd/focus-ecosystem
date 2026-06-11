@@ -18,7 +18,7 @@ export function isValidTimezone(tz) {
 
 /**
  * Break a Date into local-time pieces for the given IANA timezone.
- * Returns { year, month, day, hour (0-23), weekday (0=Sun), dateStr }.
+ * Returns { year, month, day, hour (0-23), minute, weekday (0=Sun), dateStr }.
  * Falls back to UTC for an unknown timezone.
  */
 export function toUserDate(date, tz = 'UTC') {
@@ -27,7 +27,7 @@ export function toUserDate(date, tz = 'UTC') {
     timeZone: zone,
     hour12:   false,
     year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', weekday: 'short',
+    hour: '2-digit', minute: '2-digit', weekday: 'short',
   }).formatToParts(date);
 
   const get = (t) => parts.find((p) => p.type === t)?.value;
@@ -39,6 +39,7 @@ export function toUserDate(date, tz = 'UTC') {
     month:   Number(get('month')),
     day:     Number(get('day')),
     hour,
+    minute:  Number(get('minute')),
     weekday: WEEKDAY[get('weekday')] ?? 0,
     dateStr: `${get('year')}-${get('month')}-${get('day')}`,
   };

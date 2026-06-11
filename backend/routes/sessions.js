@@ -57,7 +57,8 @@ router.get('/', asyncHandler(async (req, res) => {
     .sort({ dateStr: -1, startedAt: -1 })
     .limit(Number(req.query.limit) || 100);
 
-  res.json(sessions.map(Session.toFrontendRecord));
+  const tz = req.user.settings?.timezone || 'UTC';
+  res.json(sessions.map(s => Session.toFrontendRecord(s, tz)));
 }));
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
@@ -114,7 +115,8 @@ router.post('/', asyncHandler(async (req, res) => {
     timestamp: session.startedAt,
   });
 
-  res.status(201).json(Session.toFrontendRecord(session));
+  const tz = req.user.settings?.timezone || 'UTC';
+  res.status(201).json(Session.toFrontendRecord(session, tz));
 }));
 
 // ─── PATCH /api/sessions/:id/end ─────────────────────────────────────────────
@@ -222,7 +224,7 @@ router.patch('/:id/end', asyncHandler(async (req, res) => {
   invalidateSuggestion(req.user._id);
 
   res.json({
-    session: Session.toFrontendRecord(updated),
+    session: Session.toFrontendRecord(updated, tz),
     streak:  streakData.streak,
   });
 }));

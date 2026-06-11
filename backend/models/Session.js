@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { toUserDate } from '../utils/datetime.js';
 
 const TimerConfigSchema = new mongoose.Schema({
   plannedDuration:   { type: Number, required: true },  
@@ -56,12 +57,15 @@ const SessionSchema = new mongoose.Schema({
 SessionSchema.index({ userId: 1, dateStr: -1 });
 SessionSchema.index({ userId: 1, status: 1, dateStr: 1 });
 
-SessionSchema.statics.toFrontendRecord = function (doc) {
+// `tz` is the user's IANA timezone (req.user.settings.timezone), so the
+// displayed start/end times match the local clock the session was run on —
+// the same zone used by the analytics "best hour" and date-range queries.
+SessionSchema.statics.toFrontendRecord = function (doc, tz = 'UTC') {
   const start = doc.startedAt
-    ? `${String(doc.startedAt.getHours()).padStart(2,'0')}:${String(doc.startedAt.getMinutes()).padStart(2,'0')}`
+    ? (() => { const p = toUserDate(doc.startedAt, tz); return `${String(p.hour).padStart(2,'0')}:${String(p.minute).padStart(2,'0')}`; })()
     : '';
   const end = doc.endedAt
-    ? `${String(doc.endedAt.getHours()).padStart(2,'0')}:${String(doc.endedAt.getMinutes()).padStart(2,'0')}`
+    ? (() => { const p = toUserDate(doc.endedAt, tz); return `${String(p.hour).padStart(2,'0')}:${String(p.minute).padStart(2,'0')}`; })()
     : '';
 
   return {

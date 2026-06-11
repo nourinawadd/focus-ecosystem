@@ -173,8 +173,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
           {hasData ? (
             <>
               <View style={s.healthRow}>
-                <Text style={s.healthNum}>{health}</Text>
-                <Text style={s.healthMax}>/100</Text>
+                <Text style={s.healthNum}>{health}%</Text>
               </View>
               <View style={s.track}>
                 <Animated.View
@@ -187,9 +186,9 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
                 />
               </View>
               <View style={s.breakRow}>
-                <Text style={s.breakItem}>Consistency · {breakdown.consistency}/40</Text>
-                <Text style={s.breakItem}>Completion · {breakdown.completion}/30</Text>
-                <Text style={s.breakItem}>Volume · {breakdown.volume}/30</Text>
+                <Text style={s.breakItem}>Consistency · {Math.round((breakdown.consistency / 40) * 100)}%</Text>
+                <Text style={s.breakItem}>Completion · {Math.round((breakdown.completion / 30) * 100)}%</Text>
+                <Text style={s.breakItem}>Volume · {Math.round((breakdown.volume / 30) * 100)}%</Text>
               </View>
             </>
           ) : (
