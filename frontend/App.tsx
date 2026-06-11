@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
+import OnboardingScreenTimeScreen, { SCREEN_TIME_ONBOARDING_KEY } from './screens/OnboardingScreenTimeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -24,11 +25,17 @@ import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
 import { registerForPush, unregisterPush } from './notifications';
-import { isSupported as screenTimeSupported, clearShield as clearScreenTimeShield } from 'anchor-screen-time';
+import {
+  isSupported as screenTimeSupported,
+  clearShield as clearScreenTimeShield,
+  getAuthorizationStatus as getScreenTimeAuthStatus,
+} from 'anchor-screen-time';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'SignUp' | 'Login' | 'VerifyEmail' | 'Dashboard' | 'Profile' | 'Settings'
+  | 'SignUp' | 'Login' | 'VerifyEmail' | 'OnboardingScreenTime'
+  | 'Dashboard' | 'Profile' | 'Settings'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
 
@@ -54,7 +61,7 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
 export default function App() {
@@ -266,6 +273,22 @@ export default function App() {
         else setSessions([]);
       });
 
+    // Screen Time permission onboarding — once per device, only while iOS has
+    // never been asked (notDetermined). Granting, denying, or skipping sets
+    // the flag, so this can never nag. A live-session resume wins over it.
+    (async () => {
+      if (!screenTimeSupported()) return;
+      if (await AsyncStorage.getItem(SCREEN_TIME_ONBOARDING_KEY)) return;
+      const status = await getScreenTimeAuthStatus();
+      if (status !== 'notDetermined') {
+        // Already granted/denied elsewhere (e.g. via Create Session) — done.
+        await AsyncStorage.setItem(SCREEN_TIME_ONBOARDING_KEY, 'seen');
+        return;
+      }
+      if (currentRef.current === 'ActiveSession') return;   // don't interrupt a resumed session
+      navigate('OnboardingScreenTime');
+    })().catch(console.error);
+
     apiFetch<UserTag[]>('/user/nfc-tags', token)
       .then(setUserTags)
       .catch(console.error);
@@ -324,6 +347,7 @@ export default function App() {
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
         {current === 'Login'           && <LoginScreen nav={nav} />}
         {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
+        {current === 'OnboardingScreenTime' && <OnboardingScreenTimeScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}
         {current === 'Settings'        && <SettingsScreen nav={nav} />}
