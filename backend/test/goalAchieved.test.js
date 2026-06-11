@@ -24,9 +24,10 @@ async function makeUser() {
   return { token: reg.body.accessToken, id: reg.body.user.id };
 }
 
-function startSession(token, plannedDuration = 25) {
+async function startSession(token, plannedDuration = 25) {
+  const cats = await request(app).get('/api/user/categories').set(auth(token));
   return request(app).post('/api/sessions').set(auth(token)).send({
-    type: 'STUDY', timerMode: 'COUNTDOWN',
+    categoryId: cats.body[0].id, timerMode: 'COUNTDOWN',
     timerConfig: { plannedDuration },
     dateStr: today, startedAt: new Date().toISOString(),
   });

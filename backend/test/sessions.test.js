@@ -16,12 +16,19 @@ async function makeUser() {
   return { token: reg.body.accessToken, userId: reg.body.user.id };
 }
 
-function createSession(token, overrides = {}) {
+async function createSession(token, overrides = {}) {
+  let categoryId = overrides.categoryId;
+  if (!categoryId) {
+    const cats = await request(app)
+      .get('/api/user/categories')
+      .set('Authorization', `Bearer ${token}`);
+    categoryId = cats.body[0].id;
+  }
   return request(app)
     .post('/api/sessions')
     .set('Authorization', `Bearer ${token}`)
     .send({
-      type:        'STUDY',
+      categoryId,
       timerMode:   'COUNTDOWN',
       timerConfig: { plannedDuration: 25 },
       dateStr:     today,

@@ -21,11 +21,14 @@ async function makeUser() {
 
 // Create a session on a specific day (started at noon UTC that day) and end it.
 async function sessionOn(token, dateStr, { status = 'COMPLETED', actualDuration = 30 } = {}) {
+  const cats = await request(app)
+    .get('/api/user/categories')
+    .set('Authorization', `Bearer ${token}`);
   const created = await request(app)
     .post('/api/sessions')
     .set('Authorization', `Bearer ${token}`)
     .send({
-      type: 'STUDY', timerMode: 'COUNTDOWN',
+      categoryId: cats.body[0].id, timerMode: 'COUNTDOWN',
       timerConfig: { plannedDuration: 30 },
       dateStr, startedAt: `${dateStr}T12:00:00.000Z`,
     });

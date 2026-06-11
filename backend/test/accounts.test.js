@@ -140,9 +140,11 @@ describe('account types — feature parity for a social account', () => {
     const today = new Date().toISOString().slice(0, 10);
 
     // Run the core productivity loop exactly as a password user would.
+    const cats = await request(app).get('/api/user/categories')
+      .set('Authorization', `Bearer ${token}`);
     const created = await request(app).post('/api/sessions')
       .set('Authorization', `Bearer ${token}`)
-      .send({ type: 'STUDY', timerMode: 'COUNTDOWN', timerConfig: { plannedDuration: 25 },
+      .send({ categoryId: cats.body[0].id, timerMode: 'COUNTDOWN', timerConfig: { plannedDuration: 25 },
               dateStr: today, startedAt: `${today}T09:00:00.000Z` });
     expect(created.status).toBe(201);
 

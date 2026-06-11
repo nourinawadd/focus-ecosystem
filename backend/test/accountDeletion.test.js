@@ -29,8 +29,9 @@ const today = () => {
 /** Create one of each owned document type for the user behind `token`. */
 async function seedOwnedData(token) {
   // Session (+ its SESSION_STARTED FocusLog) via the API.
+  const cats = await request(app).get('/api/user/categories').set(auth(token));
   const session = await request(app).post('/api/sessions').set(auth(token))
-    .send({ dateStr: today(), timerConfig: { plannedDuration: 25 } });
+    .send({ categoryId: cats.body[0].id, dateStr: today(), timerConfig: { plannedDuration: 25 } });
   expect(session.status).toBe(201);
 
   // End it so Statistics get built via syncStats.

@@ -26,10 +26,13 @@ async function makeUser() {
 // Create N completed sessions today so buildUserProfile has enough data.
 async function seedCompleted(token, n) {
   const today = new Date().toISOString().slice(0, 10);
+  const cats = await request(app).get('/api/user/categories')
+    .set('Authorization', `Bearer ${token}`);
+  const categoryId = cats.body[0].id;
   for (let i = 0; i < n; i++) {
     const created = await request(app).post('/api/sessions')
       .set('Authorization', `Bearer ${token}`)
-      .send({ type: 'STUDY', timerMode: 'COUNTDOWN', timerConfig: { plannedDuration: 25 },
+      .send({ categoryId, timerMode: 'COUNTDOWN', timerConfig: { plannedDuration: 25 },
               dateStr: today, startedAt: new Date().toISOString() });
     await request(app).patch(`/api/sessions/${created.body.id}/end`)
       .set('Authorization', `Bearer ${token}`)
