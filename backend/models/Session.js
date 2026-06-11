@@ -74,6 +74,16 @@ SessionSchema.statics.toFrontendRecord = function (doc) {
     focusScore: doc.focusScore,
     completed:  doc.status === 'COMPLETED',
     dateStr:    doc.dateStr,
+
+    // Lifecycle fields — let the client detect a session orphaned by an app
+    // kill (still ACTIVE, no end) and either finalize or resume it on launch.
+    status:          doc.status,
+    timerMode:       doc.timerMode,
+    startedAtISO:    doc.startedAt ? doc.startedAt.toISOString() : null,
+    plannedDuration: doc.timerConfig?.plannedDuration ?? null,
+    pomodoroWork:    doc.timerConfig?.pomodoroWork    ?? null,
+    pomodoroBreak:   doc.timerConfig?.pomodoroBreak   ?? null,
+    blockedApps:     doc.blockedApps ?? [],
   };
 };
 

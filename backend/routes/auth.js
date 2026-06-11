@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
@@ -6,11 +7,38 @@ import RefreshToken from '../models/RefreshToken.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 import { signAccess, signRefresh, hashToken } from '../utils/jwt.js';
 import { verifyGoogleToken, verifyAppleToken } from '../utils/socialAuth.js';
+import { sendVerificationEmail } from '../utils/mailer.js';
 
 const router = express.Router();
 
 const MIN_PASSWORD = 8;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days
+
+// ─── Email verification ──────────────────────────────────────────────────────
+// Gated by REQUIRE_EMAIL_VERIFICATION=true (set on Render). When off, /register
+// behaves as before — accounts are created verified and get tokens immediately —
+// so local dev and the test suite need no Brevo setup.
+const VERIFICATION_TTL_MS  = 10 * 60 * 1000;  // code lifetime
+const RESEND_COOLDOWN_MS   = 60 * 1000;       // min gap between sends
+const MAX_VERIFY_ATTEMPTS  = 5;               // wrong codes before a resend is forced
+
+const requireVerification = () => process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
+
+// crypto.randomInt is uniform — no modulo bias; always 6 digits.
+const generateCode = () => String(crypto.randomInt(100000, 1000000));
+
+// Mint + store a fresh code (invalidating any previous one) and email it.
+async function issueVerificationCode(user) {
+  const code = generateCode();
+  user.verification = {
+    codeHash:   await bcrypt.hash(code, 10),
+    expiresAt:  new Date(Date.now() + VERIFICATION_TTL_MS),
+    attempts:   0,
+    lastSentAt: new Date(),
+  };
+  await user.save();
+  await sendVerificationEmail(user.email, code);   // best-effort; never throws
+}
 
 // Dummy hash compared against when no user is found, so /login takes the same
 // time whether or not the email exists (mitigates user-enumeration timing).
@@ -149,13 +177,75 @@ router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
     { id: `cat_${Date.now()}_learning`, name: 'Learning' },
   ];
 
-  const user = await User.create({
-    name,
-    email,
-    passwordHash: password,
-    categories: defaultCategories,
-  });
+  if (requireVerification()) {
+    const user = await User.create({
+      name, email, passwordHash: password, emailVerified: false, categories: defaultCategories,
+    });
+    await issueVerificationCode(user);
+    // No tokens until the email is verified — the client routes to the
+    // verification screen and exchanges the code for tokens there.
+    return res.status(201).json({ verificationRequired: true, email: user.email });
+  }
+
+  const user = await User.create({ name, email, passwordHash: password, categories: defaultCategories });
   res.status(201).json(await issueTokens(user, req));
+}));
+
+// ─── POST /api/auth/verify-email ─────────────────────────────────────────────
+// Body: { email, code }. On success the account is activated and the same
+// access+refresh pair as /login is returned, so verification flows straight
+// into the app. Responses for unknown email / wrong code are identical to
+// avoid account enumeration.
+router.post('/verify-email', loginLimiter, asyncHandler(async (req, res) => {
+  const email = (req.body.email ?? '').trim().toLowerCase();
+  const code  = String(req.body.code ?? '').trim();
+
+  if (!email || !code)
+    return res.status(400).json({ message: 'email and code are required' });
+
+  const user = await User.findOne({ email });
+  if (!user || user.emailVerified || !user.verification?.codeHash)
+    return res.status(400).json({ message: 'Invalid email or code' });
+
+  const v = user.verification;
+  if (v.expiresAt && v.expiresAt.getTime() < Date.now())
+    return res.status(400).json({ message: 'Code expired — request a new one', code: 'CODE_EXPIRED' });
+  if (v.attempts >= MAX_VERIFY_ATTEMPTS)
+    return res.status(400).json({ message: 'Too many attempts — request a new code', code: 'CODE_LOCKED' });
+
+  // Count the attempt before comparing so a hammering client can't race the
+  // increment.
+  user.verification.attempts += 1;
+  await user.save();
+
+  if (!(await bcrypt.compare(code, v.codeHash)))
+    return res.status(400).json({ message: 'Invalid email or code' });
+
+  user.emailVerified = true;
+  user.verification  = { codeHash: null, expiresAt: null, attempts: 0, lastSentAt: null };
+  await user.save();
+
+  res.json(await issueTokens(user, req));
+}));
+
+// ─── POST /api/auth/resend-code ──────────────────────────────────────────────
+// Body: { email }. Always answers 200 for unknown/already-verified emails so
+// the endpoint can't be used to probe which addresses have accounts. A real
+// resend is throttled to one per RESEND_COOLDOWN_MS.
+router.post('/resend-code', loginLimiter, asyncHandler(async (req, res) => {
+  const email = (req.body.email ?? '').trim().toLowerCase();
+  if (!email)
+    return res.status(400).json({ message: 'email is required' });
+
+  const user = await User.findOne({ email });
+  if (user && !user.emailVerified) {
+    const last = user.verification?.lastSentAt?.getTime() ?? 0;
+    if (Date.now() - last < RESEND_COOLDOWN_MS)
+      return res.status(429).json({ message: 'Please wait a minute before requesting another code' });
+    await issueVerificationCode(user);
+  }
+
+  res.json({ sent: true });
 }));
 
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
@@ -177,6 +267,12 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
 
   if (!user || !valid)
     return res.status(401).json({ message: 'Invalid credentials' });
+
+  // Only after a correct password (an attacker without it learns nothing):
+  // unverified accounts get a distinct code so the client can route to the
+  // verification screen instead of showing "wrong credentials".
+  if (!user.emailVerified)
+    return res.status(403).json({ message: 'Email not verified', code: 'EMAIL_UNVERIFIED' });
 
   res.json(await issueTokens(user, req));
 }));

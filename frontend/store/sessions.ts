@@ -13,6 +13,16 @@ export type SessionRecord = {
   focusScore: number | null;
   completed: boolean;
   dateStr: string;      // "YYYY-MM-DD"  (local time, no UTC shift)
+
+  // Lifecycle fields (optional — absent on seed data). Used on launch to
+  // finalize or resume a session left ACTIVE by an app kill.
+  status?: string;                  // PENDING | ACTIVE | COMPLETED | ABANDONED
+  timerMode?: string;               // COUNTDOWN | POMODORO | STOPWATCH
+  startedAtISO?: string | null;     // full start timestamp (ISO)
+  plannedDuration?: number | null;  // planned focus minutes
+  pomodoroWork?: number | null;     // minutes per focus phase
+  pomodoroBreak?: number | null;    // minutes per break phase
+  blockedApps?: string[];
 };
 
 export type SessionCategory = {

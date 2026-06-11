@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ENV_URL  = process.env.EXPO_PUBLIC_API_URL;
 const DEV_URL  = 'http://10.0.2.2:5000/api';
-const PROD_URL = 'https://your-production-url/api';
+const PROD_URL = 'https://focus-ecosystem.onrender.com/api';
 
 const BASE = ENV_URL ?? (__DEV__ ? DEV_URL : PROD_URL);
 
@@ -138,6 +138,7 @@ export async function apiFetch<T = unknown>(
   if (!res.ok) {
     const err: any = new Error(data.message ?? `Request failed (${res.status})`);
     err.status = res.status;
+    err.code   = data.code;   // machine-readable error code (e.g. EMAIL_UNVERIFIED)
     throw err;
   }
   return data as T;

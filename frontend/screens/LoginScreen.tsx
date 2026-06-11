@@ -43,6 +43,15 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
       nav.updateUser({ name: user.name, email: user.email });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
+      if (e.code === 'EMAIL_UNVERIFIED') {
+        // Correct password but unverified email — get a fresh code flowing
+        // (fire-and-forget; the screen has its own resend) and go verify.
+        apiFetch('/auth/resend-code', null, {
+          method: 'POST', body: JSON.stringify({ email }),
+        }).catch(() => {});
+        nav.replace('VerifyEmail', { email });
+        return;
+      }
       setErrors({ api: e.message ?? 'Login failed. Check your credentials.' });
     } finally {
       setLoading(false);

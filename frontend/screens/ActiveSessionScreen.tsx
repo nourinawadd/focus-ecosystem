@@ -45,20 +45,64 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   const BREAK_SECS = isPomo ? pomoBreak * 60 : 0;
   const maxRounds  = isPomo ? Math.max(Math.ceil(totalSecs / (pomoWork * 60)), 1) : 1;
 
-  const [phase,        setPhase]        = useState<'focus' | 'break'>('focus');
-  const [round,        setRound]        = useState(1);
-  const [remaining,    setRemaining]    = useState(FOCUS_SECS);
-  const [running,      setRunning]      = useState(true);
+  // Resuming a session that survived an app kill: App passes the existing
+  // session id + original start so we adopt it instead of creating a new one.
+  const resumeId        = nav.params.resumeId || null;
+  const resumeStartedAt = resumeId && nav.params.resumeStartedAt
+    ? new Date(nav.params.resumeStartedAt)
+    : null;
+
+  // Fast-forward the timer to where it would be had the app stayed alive:
+  // walk the elapsed wall-clock time through the phase sequence (same scheme
+  // as reconcilePomodoro below), banking focus time for finished phases.
+  const initialState = (() => {
+    if (!resumeStartedAt) {
+      return { phase: 'focus' as const, round: 1, remaining: FOCUS_SECS, banked: 0 };
+    }
+    let over = (Date.now() - resumeStartedAt.getTime()) / 1000;
+    if (!isPomo) {
+      return {
+        phase:     'focus' as const,
+        round:     1,
+        remaining: Math.max(0, Math.round(totalSecs - over)),
+        banked:    Math.min(totalSecs, over),
+      };
+    }
+    let p: 'focus' | 'break' = 'focus';
+    let r = 1;
+    let banked = 0;
+    for (;;) {
+      const dur = p === 'focus' ? FOCUS_SECS : BREAK_SECS;
+      if (over < dur) {
+        if (p === 'focus') banked += over;
+        return { phase: p, round: r, remaining: Math.max(1, Math.round(dur - over)), banked };
+      }
+      over -= dur;
+      if (p === 'focus') {
+        banked += FOCUS_SECS;
+        p = 'break';
+      } else {
+        if (r + 1 > maxRounds) return { phase: p, round: r, remaining: 0, banked };
+        r += 1;
+        p = 'focus';
+      }
+    }
+  })();
+
+  const [phase,        setPhase]        = useState<'focus' | 'break'>(initialState.phase);
+  const [round,        setRound]        = useState(initialState.round);
+  const [remaining,    setRemaining]    = useState(initialState.remaining);
+  const [running,      setRunning]      = useState(initialState.remaining > 0);
   const [nfcModal,     setNfcModal]     = useState(false);
   const [nfcPhase,     setNfcPhase]     = useState<NfcModalPhase>('scanning');
 
-  const startedAt      = useRef(new Date());
+  const startedAt      = useRef(resumeStartedAt ?? new Date());
   const sessionIdRef   = useRef<string | null>(null);
   const shieldAppliedRef = useRef(false);
 
   // Wall-clock timer anchoring — so backgrounding can't freeze the countdown.
   const deadlineRef      = useRef(0);                   // ms timestamp the phase ends
-  const focusAccumRef    = useRef(0);                   // committed focus seconds
+  const focusAccumRef    = useRef(initialState.banked); // committed focus seconds
   const focusRunStartRef = useRef<number | null>(null); // start of the live focus run
 
   const phaseRef = useRef(phase);
@@ -97,6 +141,11 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   };
 
   useEffect(() => {
+    // Resumed sessions already exist server-side — adopt the id, don't re-create.
+    if (resumeId) {
+      sessionIdRef.current = resumeId;
+      return;
+    }
     if (!nav.token) return;
     const now = startedAt.current;
     const nfcTag = nav.params.nfcTag || null;
@@ -122,25 +171,37 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Apply the Screen Time shield on mount; clear on unmount as a safety net.
+  // The shield follows the phase: apps blocked during focus, unblocked during
+  // breaks. Pausing mid-focus keeps the block (a pause is not a break). Round
+  // is a dep so a background catch-up that lands on the same phase value (e.g.
+  // focus→break→focus) still re-asserts the shield on foreground.
   useEffect(() => {
     if (!screenTimeSupported()) return;
     (async () => {
       try {
-        if (await screenTimeHasSelection()) {
-          await applyScreenTimeShield();
-          shieldAppliedRef.current = true;
+        if (phase === 'focus') {
+          if (!shieldAppliedRef.current && await screenTimeHasSelection()) {
+            await applyScreenTimeShield();
+            shieldAppliedRef.current = true;
+          }
+        } else {
+          // Unconditional: a resumed session runs in a fresh process whose ref
+          // is false, but the previous process's shield persists system-wide.
+          await clearScreenTimeShield();
+          shieldAppliedRef.current = false;
         }
       } catch {
         // Authorization revoked or no selection — silently skip, session continues
       }
     })();
-    return () => {
-      if (shieldAppliedRef.current) {
-        clearScreenTimeShield().catch(() => {});
-        shieldAppliedRef.current = false;
-      }
-    };
+  }, [phase, round]);
+
+  // Always lift the shield when the screen unmounts (session ended).
+  useEffect(() => () => {
+    if (shieldAppliedRef.current) {
+      clearScreenTimeShield().catch(() => {});
+      shieldAppliedRef.current = false;
+    }
   }, []);
 
   const tickAnim = useRef(new Animated.Value(1)).current;

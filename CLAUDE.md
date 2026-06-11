@@ -89,16 +89,31 @@ score = min(99, max(20, round(ratio * 80) + pomoBon - penalty + 12))
 Backend requires a `.env` file with:
 ```
 MONGO_URI=
-JWT_SECRET=
+JWT_SECRET=          # min 32 chars — server refuses to boot otherwise
 JWT_REFRESH_SECRET=
+CORS_ORIGINS=        # required — comma-separated browser origins; server crashes on boot without it.
+                     # Only matters for browser clients (web preview); native fetch sends no Origin.
 JWT_EXPIRES_IN=7d   # optional, defaults to 7d
-PORT=5000           # optional, defaults to 5000
+PORT=5000           # optional, defaults to 5000 (injected automatically on Render)
+
+# AI insights (Gemini)
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+
+# Email verification (Brevo) — REQUIRE_EMAIL_VERIFICATION=true makes /register
+# create unverified accounts that must redeem a 6-digit emailed code via
+# /api/auth/verify-email before login works. Unset locally/tests: classic flow.
+REQUIRE_EMAIL_VERIFICATION=true
+BREVO_API_KEY=
+BREVO_SENDER=anchorr26@gmail.com   # must be a Brevo-verified sender
 
 # Social sign-in (Google/Apple) — required for /api/auth/google and /api/auth/apple
 GOOGLE_WEB_CLIENT_ID=    # OAuth Web client ID; the audience of the native SDK's idToken
 GOOGLE_IOS_CLIENT_ID=    # OAuth iOS client ID; also accepted as a valid audience
 APPLE_BUNDLE_ID=dev.gradproject.anchor   # audience (aud) of Apple's identityToken
 ```
+
+**Deployment**: the backend runs on Render (free tier) at `https://focus-ecosystem.onrender.com`, auto-deploying from `main` (service root directory: `backend/`). Health check: `GET /api/health` (returns `{ status, db }`; excluded from request logging). Env vars live in the Render dashboard. A free UptimeRobot monitor pings `/api/health` every 5 minutes — without it the free instance spins down after ~15 min idle, which both delays the next request by ~50 s and silently stops the in-process notification cron. The app's base URL comes from `EXPO_PUBLIC_API_URL` in `frontend/.env` (dev, baked in at bundle time — restart Metro after changing) and `PROD_URL` in `frontend/api/client.ts` (release builds).
 
 **Social sign-in** (`utils/socialAuth.js`): the mobile app sends a provider-signed ID token to `POST /api/auth/google` (`{ idToken }`) or `POST /api/auth/apple` (`{ identityToken, fullName?, email? }`). The backend verifies the token's signature/issuer/audience against the provider's JWKS, then `findOrCreateSocialUser()` (in `routes/auth.js`) resolves it to a User — reusing the `googleId`/`appleId`-linked account, else linking to an existing account by **provider-verified email**, else creating a passwordless account — and issues the same access+refresh pair as `/login`. Social-only users have no `passwordHash`; `comparePassword` returns false for them so `/login` cleanly rejects.
 

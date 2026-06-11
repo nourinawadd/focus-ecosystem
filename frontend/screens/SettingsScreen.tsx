@@ -1,7 +1,10 @@
 // frontend/screens/SettingsScreen.tsx
 // User preferences. Every change is immediately synced to PATCH /user/settings.
-import React from 'react';
-import { View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform,
+  Modal, TextInput, ActivityIndicator, Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
@@ -59,6 +62,26 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   const { user, token } = nav;
   const initial = user.name.charAt(0).toUpperCase();
 
+  // Account deletion modal: the button stays disabled until "DELETE" is typed.
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting,    setDeleting]    = useState(false);
+  const deleteArmed = confirmText.trim().toUpperCase() === 'DELETE';
+
+  const deleteAccount = async () => {
+    if (!deleteArmed || !token) return;
+    setDeleting(true);
+    try {
+      await apiFetch('/user/me', token, { method: 'DELETE' });
+      setDeleteModal(false);
+      nav.signOut();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Updates local state instantly and fires a background sync to the backend.
   const updateAndSync = async (updates: Partial<UserProfile>) => {
     nav.updateUser(updates);
@@ -70,6 +93,8 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
     if (updates.preferredDuration   !== undefined) backendUpdates.defaultDuration     = updates.preferredDuration;
     if (updates.pomodoroEnabled     !== undefined) backendUpdates.defaultTimerMode    = updates.pomodoroEnabled ? 'POMODORO' : 'COUNTDOWN';
     if (updates.notificationsEnabled !== undefined) backendUpdates.notificationsEnabled = updates.notificationsEnabled;
+    if (updates.reminderHour         !== undefined) backendUpdates.reminderHour         = updates.reminderHour;
+    if (updates.notify               !== undefined) backendUpdates.notify               = updates.notify;
 
     try {
       await apiFetch('/user/settings', token, {
@@ -149,11 +174,81 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
       <View style={s.card}>
         <ToggleRow
           label="Notifications"
-          desc="Session reminders and completion alerts"
+          desc="Master switch — enables all notification types"
           value={user.notificationsEnabled}
-          onChange={v => updateAndSync({ notificationsEnabled: v })}
+          onChange={v => {
+            updateAndSync({ notificationsEnabled: v });
+            if (v && user.notify.dailyNudge) scheduleDailyNudge(user.reminderHour);
+            else cancelDailyNudge();
+          }}
         />
       </View>
+
+      {user.notificationsEnabled && (<>
+        <Text style={s.sectionLabel}>NOTIFICATION TYPES</Text>
+        <View style={s.card}>
+          <ToggleRow
+            label="Daily start nudge"
+            desc="Local reminder at your chosen time each day"
+            value={user.notify.dailyNudge}
+            onChange={v => {
+              const notify = { ...user.notify, dailyNudge: v };
+              updateAndSync({ notify });
+              if (v) scheduleDailyNudge(user.reminderHour);
+              else cancelDailyNudge();
+            }}
+          />
+          <ToggleRow
+            label="In-session phase alerts"
+            desc="Pomodoro focus↔break boundaries and session complete"
+            value={user.notify.inSessionAlerts}
+            onChange={v => updateAndSync({ notify: { ...user.notify, inSessionAlerts: v } })}
+          />
+          <ToggleRow
+            label="Daily summary"
+            desc="Your focus minutes, sessions, and score for the day"
+            value={user.notify.dailySummary}
+            onChange={v => updateAndSync({ notify: { ...user.notify, dailySummary: v } })}
+          />
+          <ToggleRow
+            label="Streak at risk"
+            desc="Alert at 9 PM if you haven't focused yet today"
+            value={user.notify.streakAlert}
+            onChange={v => updateAndSync({ notify: { ...user.notify, streakAlert: v } })}
+          />
+          <ToggleRow
+            label="Goal progress nudge"
+            desc="Reminder when you're partway to your daily goal"
+            value={user.notify.goalNudge}
+            onChange={v => updateAndSync({ notify: { ...user.notify, goalNudge: v } })}
+          />
+          <ToggleRow
+            label="Goal achieved"
+            desc="Celebration when you hit your daily focus goal"
+            value={user.notify.goalAchieved}
+            onChange={v => updateAndSync({ notify: { ...user.notify, goalAchieved: v } })}
+          />
+        </View>
+
+        {user.notify.dailyNudge && (
+          <View style={s.selectCard}>
+            <Text style={s.rowLabel}>Reminder time</Text>
+            <Text style={s.rowDesc}>Hour of day to receive the daily start nudge</Text>
+            <ChipRow
+              options={[17, 18, 19, 20, 21, 22] as number[]}
+              active={user.reminderHour}
+              onSelect={v => {
+                updateAndSync({ reminderHour: v });
+                if (user.notify.dailyNudge) scheduleDailyNudge(v);
+              }}
+              labelOf={v => {
+                const h = v % 12 || 12;
+                return `${h} ${v < 12 ? 'AM' : 'PM'}`;
+              }}
+            />
+          </View>
+        )}
+      </>)}
 
       <Text style={s.sectionLabel}>CONNECTED HARDWARE</Text>
       <TouchableOpacity style={s.card} onPress={() => nav.navigate('NFCSetup')} activeOpacity={0.75}>
@@ -170,7 +265,66 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
         </View>
       </TouchableOpacity>
 
+      <Text style={s.sectionLabel}>ACCOUNT</Text>
+      <TouchableOpacity
+        style={s.card}
+        onPress={() => { setConfirmText(''); setDeleteModal(true); }}
+        activeOpacity={0.75}
+      >
+        <View style={s.linkRow}>
+          <View style={s.rowInfo}>
+            <Text style={[s.rowLabel, s.dangerLabel]}>Delete Account</Text>
+            <Text style={s.rowDesc}>Permanently erase your account and all session data</Text>
+          </View>
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+        </View>
+      </TouchableOpacity>
+
       <View style={{ height: 48 }} />
+
+      <Modal
+        visible={deleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModal(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Delete account?</Text>
+            <Text style={s.modalSub}>
+              This permanently erases your account, sessions, statistics, and tags.
+              It cannot be undone. Type DELETE to confirm.
+            </Text>
+            <TextInput
+              style={s.modalInput}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setDeleteModal(false)}
+                disabled={deleting}
+              >
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalDeleteBtn, (!deleteArmed || deleting) && { opacity: 0.45 }]}
+                onPress={deleteAccount}
+                disabled={!deleteArmed || deleting}
+              >
+                {deleting
+                  ? <ActivityIndicator color={colors.white} size="small" />
+                  : <Text style={s.modalDeleteText}>Delete</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -201,4 +355,17 @@ const s = StyleSheet.create({
   chipOn:       { backgroundColor: colors.ink, borderColor: colors.ink },
   chipTxt:      { fontSize: fontSize.sm, color: colors.muted, fontWeight: '500' },
   chipTxtOn:    { color: colors.white, fontWeight: '600' },
+
+  // Account deletion
+  dangerLabel:     { color: colors.danger },
+  modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  modalCard:       { backgroundColor: colors.white, borderRadius: radii.xl, padding: 24, width: '100%', maxWidth: 340 },
+  modalTitle:      { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8 },
+  modalSub:        { fontSize: fontSize.sm, color: colors.muted, lineHeight: 20, marginBottom: 16 },
+  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16, letterSpacing: 2 },
+  modalActions:    { flexDirection: 'row', gap: 12 },
+  modalCancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
+  modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },
+  modalDeleteBtn:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.danger },
+  modalDeleteText: { fontSize: fontSize.md, fontWeight: '700', color: colors.white },
 });

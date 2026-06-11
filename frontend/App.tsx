@@ -8,6 +8,7 @@ import { View, Animated } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -23,10 +24,11 @@ import NFCSetupScreen from './screens/NFCSetupScreen';
 import Drawer from './components/Drawer';
 import { apiFetch, loadTokens, logout as clearAuth, setOnAuthExpired } from './api/client';
 import { registerForPush, unregisterPush } from './notifications';
+import { isSupported as screenTimeSupported, clearShield as clearScreenTimeShield } from 'anchor-screen-time';
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'SignUp' | 'Login' | 'Dashboard' | 'Profile' | 'Settings'
+  | 'SignUp' | 'Login' | 'VerifyEmail' | 'Dashboard' | 'Profile' | 'Settings'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
 
@@ -52,7 +54,7 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'NFCScan', 'ActiveSession', 'SessionComplete'];
 const DARK_STATUS: ScreenName[] = ['ActiveSession'];
 
 export default function App() {
@@ -102,7 +104,17 @@ export default function App() {
 
   const navigate = useCallback((screen: ScreenName, p?: NavParams) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 110, useNativeDriver: true }).start(() => {
-      if (p) setParams(prev => ({ ...prev, ...p }));
+      setParams(prev => {
+        // Params merge across navigations, so stale resume keys from an earlier
+        // resumed session would make a brand-new session adopt the old session
+        // id. Drop them on every ActiveSession entry unless explicitly passed.
+        let base = prev;
+        if (screen === 'ActiveSession') {
+          const { resumeId, resumeStartedAt, ...rest } = prev;
+          base = rest;
+        }
+        return p ? { ...base, ...p } : base;
+      });
       setCurrent(screen);
       setDrawerOpen(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
@@ -134,13 +146,18 @@ export default function App() {
     registerForPush().catch(console.error);
   }, [token]);
 
-  // Handle taps on push notifications — navigate to Dashboard for any type.
+  // Handle taps on push notifications — navigate to Dashboard for any type,
+  // except while a session is live on screen: leaving ActiveSession unmounts
+  // the timer and orphans the session, so in-session alert taps stay put.
+  const currentRef = useRef(current);
+  useEffect(() => { currentRef.current = current; }, [current]);
   useEffect(() => {
     const addNotificationResponseListener =
       (Notifications as any).addNotificationResponseReceivedListener ??
       (Notifications as any).addNotificationResponseListener;
 
     const sub = addNotificationResponseListener?.(() => {
+      if (currentRef.current === 'ActiveSession') return;
       navigate('Dashboard');
     });
     return () => sub?.remove?.();
@@ -152,6 +169,78 @@ export default function App() {
       .then(setSessions)
       .catch((e: any) => { if (e?.status === 401) signOut(); });
   }, [token, signOut]);
+
+  // A session is orphaned when the app is killed mid-session: only
+  // ActiveSessionScreen ever calls /end, so the session stays ACTIVE in the DB
+  // forever ("Incomplete" in History). On launch, finalize any orphan whose
+  // full timer window has passed — COMPLETED, since the timer ran its course
+  // unattended — and drop back into the live screen for one still mid-window.
+  const reconcileOrphans = useCallback(async (list: SessionRecord[]) => {
+    if (!token) return;
+
+    // Wall-clock length of the whole session: Pomodoro alternates focus/break
+    // phases (mirrors maxRounds in ActiveSessionScreen), countdown is planned.
+    const wallMsOf = (s: SessionRecord) => {
+      const planned = s.plannedDuration ?? s.duration;
+      if (s.timerMode === 'POMODORO') {
+        const work   = s.pomodoroWork  ?? 25;
+        const brk    = s.pomodoroBreak ?? 5;
+        const rounds = Math.max(Math.ceil(planned / work), 1);
+        return rounds * (work + brk) * 60_000;
+      }
+      return planned * 60_000;
+    };
+
+    const orphans = list.filter(s => s.status === 'ACTIVE' && s.startedAtISO);
+    let ended = false;
+    let live: SessionRecord | null = null;
+
+    for (const s of orphans) {
+      const startMs = new Date(s.startedAtISO!).getTime();
+      const wallMs  = wallMsOf(s);
+      if (Date.now() >= startMs + wallMs) {
+        try {
+          await apiFetch(`/sessions/${s.id}/end`, token, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              status:     'COMPLETED',
+              timerState: { actualDuration: s.plannedDuration ?? s.duration },
+              endedAt:    new Date(startMs + wallMs).toISOString(),
+            }),
+          });
+          ended = true;
+        } catch (e) {
+          console.warn('[sessions] failed to finalize orphaned session', e);
+        }
+      } else if (!live || s.startedAtISO! > live.startedAtISO!) {
+        live = s;
+      }
+    }
+
+    if (ended) refreshSessions();
+
+    // The Screen Time shield persists across app kills (ManagedSettingsStore is
+    // system-level). If no session is being resumed, any shield left behind by
+    // a killed session would block apps forever — lift it.
+    if (!live && screenTimeSupported()) {
+      clearScreenTimeShield().catch(() => {});
+    }
+
+    if (live) {
+      navigate('ActiveSession', {
+        resumeId:        live.id,
+        resumeStartedAt: live.startedAtISO!,
+        duration:        String(live.plannedDuration ?? live.duration),
+        pomodoro:        live.timerMode === 'POMODORO' ? 'true' : 'false',
+        pomodoroWork:    String(live.pomodoroWork  ?? 25),
+        pomodoroBreak:   String(live.pomodoroBreak ?? 5),
+        categoryId:      live.categoryId,
+        customName:      live.title,
+        blockedApps:     (live.blockedApps ?? []).join(','),
+        nfcTag:          '',
+      });
+    }
+  }, [token, refreshSessions, navigate]);
 
   const refreshTags = useCallback(() => {
     if (!token) return;
@@ -169,7 +258,10 @@ export default function App() {
     }
 
     apiFetch<SessionRecord[]>('/sessions', token)
-      .then(setSessions)
+      .then(list => {
+        setSessions(list);
+        return reconcileOrphans(list);
+      })
       .catch((e: any) => {
         if (e?.status === 401) signOut();
         else setSessions([]);
@@ -216,7 +308,7 @@ export default function App() {
         if (e?.status === 401) signOut();
         else console.error(e);
       });
-  }, [token, updateUser, signOut]);
+  }, [token, updateUser, signOut, reconcileOrphans]);
 
   const nav: NavProps = {
     navigate,
@@ -245,6 +337,7 @@ export default function App() {
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
         {current === 'Login'           && <LoginScreen nav={nav} />}
+        {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}
         {current === 'Settings'        && <SettingsScreen nav={nav} />}
