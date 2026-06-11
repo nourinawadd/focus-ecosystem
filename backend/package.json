@@ -8,7 +8,8 @@
     "start": "node server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "ai:eval": "node --env-file=.env scripts/ai-eval.mjs"
   },
   "keywords": [],
   "author": "",
