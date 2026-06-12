@@ -1,5 +1,5 @@
 import Session from '../models/Session.js';
-import { generate, isGeminiConfigured } from '../config/gemini.js';
+import { generate, isLLMConfigured } from '../config/llm.js';
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const cache = new Map(); // userId -> { suggestion, expiresAt }
@@ -73,7 +73,7 @@ async function buildLightStats(userId) {
 }
 
 export async function getSuggestion(userId) {
-  if (!isGeminiConfigured()) {
+  if (!isLLMConfigured()) {
     const err = new Error('AI service not configured');
     err.code = 'NO_API_KEY';
     throw err;

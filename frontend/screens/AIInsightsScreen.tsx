@@ -1,3 +1,6 @@
+// frontend/screens/AIInsightsScreen.tsx
+// Personalized productivity insights from /api/ai/insights, styled to match
+// the Dashboard (ink-on-light, dark hero card, yellow accent).
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -7,10 +10,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
+import PillBadge from '../components/PillBadge';
 import { NavProps } from '../App';
 import { apiFetch } from '../api/client';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
@@ -39,19 +44,33 @@ type InsightResponse = {
   stale?: boolean;
 };
 
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 const formatHour = (h: number) => {
   const hour = h % 12 === 0 ? 12 : h % 12;
   const ampm = h < 12 ? 'AM' : 'PM';
   return `${hour}:00 ${ampm}`;
 };
 
-const dayShort = (day: string) => day.slice(0, 3).toUpperCase();
+// Raw model confidence (0-1) reads better as a word than as "83%".
+const confidenceWord = (c: number) => (c >= 0.75 ? 'High' : c >= 0.45 ? 'Medium' : 'Low');
 
-const riskColor = (level: string) => {
+const riskMeta = (level: string) => {
   const l = level.toLowerCase();
-  if (l === 'low') return '#10b981';
-  if (l === 'medium') return '#f59e0b';
-  return '#ef4444';
+  if (l === 'low')    return { color: colors.success, label: 'LOW RISK' };
+  if (l === 'medium') return { color: colors.amber,   label: 'MEDIUM RISK' };
+  return { color: colors.danger, label: 'HIGH RISK' };
+};
+
+const sentenceCase = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// "Updated just now / 25m ago / 4h ago / Jun 9".
+const timeAgo = (iso: string) => {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (mins < 48 * 60) return `${Math.floor(mins / 60)}h ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
 export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
@@ -63,13 +82,15 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
   const [needsMoreData, setNeedsMoreData] = useState(false);
   const [stale, setStale] = useState(false);
 
+  const name    = nav.user.name !== 'User' ? nav.user.name : (nav.params.name ?? 'User');
+  const initial = name.charAt(0).toUpperCase();
+
   const fetchInsight = useCallback(async () => {
     if (!nav.token) return;
     setError(null);
     setNeedsMoreData(false);
     try {
-        const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
-        console.log('AI response:', JSON.stringify(res));
+      const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
       if (!res) {
         setNeedsMoreData(true);
         setInsight(null);
@@ -83,9 +104,9 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
         return;
       }
       if (e?.status === 503) {
-        setError('AI service is not configured yet. Please add your Gemini API key.');
+        setError('AI insights are not available right now.');
       } else if (e?.status === 502) {
-        setError('AI returned an unexpected response. Try regenerating.');
+        setError('The AI returned an unexpected response. Try regenerating.');
       } else {
         setError(e?.message || 'Failed to load insights');
       }
@@ -114,7 +135,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
       if (e?.status === 400) {
         setNeedsMoreData(true);
       } else if (e?.status === 503) {
-        setError('AI service is not configured yet.');
+        setError('AI insights are not available right now.');
       } else {
         setError(e?.message || 'Failed to regenerate');
       }
@@ -132,116 +153,129 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
     fetchInsight();
   }, [fetchInsight]);
 
+  // Schedule, cleaned for display: valid days only, ordered starting from
+  // today (so the next relevant slot is on top), capped at 5.
+  const todayIdx = new Date().getDay();
+  const schedule = (insight?.suggestedSchedule ?? [])
+    .filter(s => DAYS.includes(s.day))
+    .sort((a, b) => ((DAYS.indexOf(a.day) - todayIdx + 7) % 7) - ((DAYS.indexOf(b.day) - todayIdx + 7) % 7))
+    .slice(0, 5);
+
+  const risk = insight ? riskMeta(insight.distractionRisk.level) : null;
+
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading your insights…</Text>
+      <View style={[styles.screen, styles.center]}>
+        <ActivityIndicator size="large" color={colors.ink} />
+        <Text style={styles.loadingText}>Analyzing your sessions…</Text>
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />}
     >
-      {/* Header */}
+      {/* ── Header (mirrors Dashboard) ─────────────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.openDrawer()} style={styles.menuBtn}>
-          <Ionicons name="menu" size={26} color={colors.textPrimary} />
+        <View>
+          <Text style={styles.eyebrow}>LAST 30 DAYS</Text>
+          <Text style={styles.title}>AI Insights</Text>
+        </View>
+        <TouchableOpacity style={styles.avatar} onPress={nav.openDrawer}>
+          <Text style={styles.avatarText}>{initial}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Insights</Text>
-        <View style={{ width: 26 }} />
       </View>
 
-      {/* Empty state — not enough data */}
+      {/* ── Empty state — not enough data ──────────────────────────────────── */}
       {needsMoreData && (
-        <Card style={styles.emptyCard}>
-          <Ionicons name="bulb-outline" size={48} color={colors.primary} />
+        <Card style={styles.centerCard} padding={spacing.xxl}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="sparkles-outline" size={26} color={colors.white} />
+          </View>
           <Text style={styles.emptyTitle}>Not enough data yet</Text>
           <Text style={styles.emptyText}>
-            Complete at least 3 focus sessions and I'll give you personalized insights about
-            your productivity patterns.
+            Complete at least 3 focus sessions and you'll get personalized
+            insights about your productivity patterns.
           </Text>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => nav.navigate('CreateSession')}
-          >
-            <Text style={styles.primaryBtnText}>Start a session</Text>
+          <TouchableOpacity style={styles.inkBtn} onPress={() => nav.navigate('CreateSession')}>
+            <Text style={styles.inkBtnText}>Start a session</Text>
           </TouchableOpacity>
         </Card>
       )}
 
-      {/* Error state */}
+      {/* ── Error state ────────────────────────────────────────────────────── */}
       {error && !needsMoreData && (
-        <Card style={styles.errorCard}>
-          <Ionicons name="alert-circle-outline" size={32} color="#ef4444" />
+        <Card style={styles.centerCard} padding={spacing.xxl}>
+          <Ionicons name="cloud-offline-outline" size={32} color={colors.muted} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={fetchInsight}>
-            <Text style={styles.secondaryBtnText}>Try again</Text>
+          <TouchableOpacity style={styles.outlineBtn} onPress={fetchInsight}>
+            <Text style={styles.outlineBtnText}>Try again</Text>
           </TouchableOpacity>
         </Card>
       )}
 
-      {/* Main content */}
+      {/* ── Insight content ────────────────────────────────────────────────── */}
       {insight && !needsMoreData && (
         <>
           {stale && (
             <View style={styles.staleBanner}>
-              <Ionicons name="time-outline" size={16} color="#f59e0b" />
+              <Ionicons name="time-outline" size={15} color={colors.amber} />
               <Text style={styles.staleText}>
-                This insight is from older data. Add more sessions for a fresh analysis.
+                Based on older data — complete more sessions for a fresh analysis.
               </Text>
             </View>
           )}
 
-          {/* Hero insight card */}
-          <View style={styles.heroCard}>
+          {/* Hero insight (dark, like the Dashboard score card) */}
+          <Card dark style={styles.mb14} padding={22}>
             <View style={styles.heroHeader}>
-              <Ionicons name="sparkles" size={20} color="#fff" />
-              <Text style={styles.heroLabel}>Your AI Insight</Text>
+              <Ionicons name="sparkles" size={13} color={colors.yellow} />
+              <SectionLabel noTopMargin style={styles.heroLabel}>Your AI Insight</SectionLabel>
             </View>
             <Text style={styles.heroText}>{insight.insightText}</Text>
-          </View>
+          </Card>
 
-          {/* Stats row */}
+          {/* Key numbers */}
           <View style={styles.statsRow}>
-            <Card style={styles.statCard}>
-              <Ionicons name="time-outline" size={22} color={colors.primary} />
+            <Card style={styles.statCard} padding={spacing.lg}>
               <Text style={styles.statValue}>{formatHour(insight.bestProductiveHour)}</Text>
               <Text style={styles.statLabel}>Peak hour</Text>
             </Card>
-            <Card style={styles.statCard}>
-              <Ionicons name="hourglass-outline" size={22} color={colors.primary} />
+            <Card style={styles.statCard} padding={spacing.lg}>
               <Text style={styles.statValue}>{insight.optimalDuration} min</Text>
-              <Text style={styles.statLabel}>Optimal length</Text>
+              <Text style={styles.statLabel}>Best session length</Text>
             </Card>
           </View>
 
           {/* Distraction risk */}
           <SectionLabel>Distraction risk</SectionLabel>
-          <Card style={styles.riskCard}>
+          <Card style={styles.mb14} padding={18}>
             <View style={styles.riskHeader}>
+              <PillBadge label={risk!.label} bg={colors.ink} color={colors.white} dot dotColor={risk!.color} caps />
+              <Text style={styles.riskScore}>
+                {insight.distractionRisk.score}
+                <Text style={styles.riskScoreMax}> /100</Text>
+              </Text>
+            </View>
+            <View style={styles.riskTrack}>
               <View
                 style={[
-                  styles.riskBadge,
-                  { backgroundColor: riskColor(insight.distractionRisk.level) },
+                  styles.riskFill,
+                  { width: `${Math.min(100, Math.max(0, insight.distractionRisk.score))}%` as any,
+                    backgroundColor: risk!.color },
                 ]}
-              >
-                <Text style={styles.riskBadgeText}>
-                  {insight.distractionRisk.level.toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.riskScore}>{insight.distractionRisk.score}/100</Text>
+              />
             </View>
             {insight.distractionRisk.factors.length > 0 && (
               <View style={styles.factorList}>
                 {insight.distractionRisk.factors.map((f, i) => (
                   <View key={i} style={styles.factorRow}>
-                    <Ionicons name="ellipse" size={6} color={colors.textSecondary} />
-                    <Text style={styles.factorText}>{f}</Text>
+                    <View style={styles.factorDot} />
+                    <Text style={styles.factorText}>{sentenceCase(f)}</Text>
                   </View>
                 ))}
               </View>
@@ -249,50 +283,54 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
           </Card>
 
           {/* Suggested schedule */}
-          <SectionLabel>Suggested schedule</SectionLabel>
-          {insight.suggestedSchedule.filter(s => s.day != null).map((slot, i) => (
-            <Card key={i} style={styles.scheduleCard}>
-              <View style={styles.dayBadge}>
-                <Text style={styles.dayBadgeText}>{dayShort(slot.day)}</Text>
-              </View>
-              <View style={styles.scheduleInfo}>
-                <Text style={styles.scheduleTime}>
-                  {formatHour(slot.startHour)} · {slot.durationMinutes} min
-                </Text>
-                <View style={styles.confidenceBar}>
-                  <View
-                    style={[
-                      styles.confidenceFill,
-                      { width: `${Math.round(slot.confidence * 100)}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-              <Text style={styles.confidenceText}>
-                {Math.round(slot.confidence * 100)}%
+          {schedule.length > 0 && (
+            <>
+              <SectionLabel>Suggested schedule</SectionLabel>
+              {schedule.map((slot, i) => {
+                const isToday = DAYS.indexOf(slot.day) === todayIdx;
+                return (
+                  <Card key={i} style={styles.scheduleCard} padding={spacing.lg}>
+                    <View style={[styles.dayBadge, isToday && styles.dayBadgeToday]}>
+                      <Text style={[styles.dayBadgeText, isToday && styles.dayBadgeTextToday]}>
+                        {slot.day.slice(0, 3).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.scheduleInfo}>
+                      <Text style={styles.scheduleDay}>{isToday ? 'Today' : slot.day}</Text>
+                      <Text style={styles.scheduleTime}>
+                        {formatHour(slot.startHour)} · {slot.durationMinutes} min
+                      </Text>
+                    </View>
+                    <Text style={styles.confidenceText}>
+                      {confidenceWord(slot.confidence).toUpperCase()}
+                    </Text>
+                  </Card>
+                );
+              })}
+              <Text style={styles.confidenceHint}>
+                Confidence reflects how strongly your past sessions support each slot.
               </Text>
-            </Card>
-          ))}
+            </>
+          )}
 
-          {/* Regenerate button */}
+          {/* Regenerate */}
           <TouchableOpacity
-            style={[styles.regenerateBtn, generating && styles.btnDisabled]}
+            style={[styles.inkBtn, styles.regenerateBtn, generating && styles.btnDisabled]}
             onPress={regenerate}
             disabled={generating}
+            activeOpacity={0.8}
           >
             {generating ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.white} />
             ) : (
               <>
-                <Ionicons name="refresh" size={18} color="#fff" />
-                <Text style={styles.regenerateBtnText}>Regenerate insights</Text>
+                <Ionicons name="refresh" size={17} color={colors.white} />
+                <Text style={styles.inkBtnText}>Regenerate insights</Text>
               </>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.timestamp}>
-            Generated {new Date(insight.generatedAt).toLocaleString()}
-          </Text>
+          <Text style={styles.timestamp}>Updated {timeAgo(insight.generatedAt)}</Text>
         </>
       )}
     </ScrollView>
@@ -300,247 +338,87 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  screen:    { flex: 1, backgroundColor: colors.bg },
+  container: { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
+  center:    { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: spacing.sm, color: colors.muted, fontSize: fontSize.sm },
+
+  header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
+  eyebrow:    { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
+  title:      { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
+  avatar:     { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
+
+  mb14: { marginBottom: 14 },
+
+  // Empty / error
+  centerCard:      { alignItems: 'center', marginBottom: 14 },
+  emptyIconCircle: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: colors.ink,
+    justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg,
   },
-  content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  menuBtn: {
-    padding: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  emptyCard: {
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    lineHeight: 20,
-  },
-  errorCard: {
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  errorText: {
-    fontSize: fontSize.sm,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginVertical: spacing.md,
-  },
+  emptyTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: spacing.xs },
+  emptyText:  { fontSize: fontSize.sm, color: colors.muted, textAlign: 'center', lineHeight: 20, marginBottom: spacing.xl },
+  errorText:  { fontSize: fontSize.sm, color: colors.inkSoft, textAlign: 'center', lineHeight: 20, marginVertical: spacing.lg },
+
+  // Stale banner (matches the amber note style used elsewhere)
   staleBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: '#fff8e1', borderRadius: radii.md,
+    paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md, marginBottom: 14,
   },
-  staleText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    color: '#92400e',
-  },
-  heroCard: {
-    backgroundColor: '#1f2937',
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  heroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  heroLabel: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  heroText: {
-    color: '#fff',
-    fontSize: fontSize.md,
-    lineHeight: 22,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: spacing.md,
-  },
-  statValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-  },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-  },
-  riskCard: {
-    padding: spacing.md,
-  },
-  riskHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  riskBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radii.sm,
-  },
-  riskBadgeText: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  riskScore: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  factorList: {
-    gap: spacing.xs,
-  },
-  factorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  factorText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-  },
-  scheduleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    marginBottom: spacing.xs,
-    gap: spacing.md,
-  },
+  staleText: { flex: 1, fontSize: fontSize.xs, color: '#8a6d00', lineHeight: 16 },
+
+  // Hero
+  heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
+  heroLabel:  { color: colors.mutedLight, marginBottom: 0 },
+  heroText:   { color: colors.white, fontSize: fontSize.md + 1, lineHeight: 24 },
+
+  // Key numbers
+  statsRow:  { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  statCard:  { flex: 1 },
+  statValue: { fontSize: 22, fontWeight: 'bold', color: colors.ink, marginBottom: 2 },
+  statLabel: { fontSize: fontSize.xs, color: colors.muted },
+
+  // Distraction risk
+  riskHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  riskScore:    { fontSize: fontSize.xxl, fontWeight: 'bold', color: colors.ink },
+  riskScoreMax: { fontSize: fontSize.sm, color: colors.muted, fontWeight: 'normal' },
+  riskTrack:    { height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
+  riskFill:     { height: 6, borderRadius: 3 },
+  factorList:   { marginTop: spacing.lg, gap: spacing.sm },
+  factorRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  factorDot:    { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.mutedLight },
+  factorText:   { flex: 1, fontSize: fontSize.sm, color: colors.inkSoft, lineHeight: 19 },
+
+  // Schedule
+  scheduleCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md + 2, marginBottom: spacing.sm + 2 },
   dayBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 46, height: 46, borderRadius: radii.md, backgroundColor: colors.ink,
+    justifyContent: 'center', alignItems: 'center',
   },
-  dayBadgeText: {
-    color: '#fff',
-    fontSize: fontSize.xs,
-    fontWeight: '700',
+  dayBadgeToday:     { backgroundColor: colors.yellow },
+  dayBadgeText:      { color: colors.white, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.5 },
+  dayBadgeTextToday: { color: colors.ink },
+  scheduleInfo: { flex: 1 },
+  scheduleDay:  { fontSize: fontSize.md, fontWeight: '700', color: colors.ink, marginBottom: 2 },
+  scheduleTime: { fontSize: fontSize.sm, color: colors.muted },
+  confidenceText: { fontSize: fontSize.xs, fontWeight: '700', color: colors.muted, letterSpacing: 0.8 },
+  confidenceHint: { fontSize: fontSize.xs, color: colors.mutedLight, marginTop: 2, marginBottom: spacing.sm },
+
+  // Buttons
+  inkBtn: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.ink, borderRadius: radii.md, paddingVertical: 16, paddingHorizontal: spacing.xxl,
   },
-  scheduleInfo: {
-    flex: 1,
+  inkBtnText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  regenerateBtn: { marginTop: spacing.lg },
+  outlineBtn: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: radii.md,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.xxl,
   },
-  scheduleTime: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  confidenceBar: {
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  confidenceFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-  },
-  confidenceText: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  regenerateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    marginTop: spacing.lg,
-    gap: spacing.xs,
-  },
-  regenerateBtnText: {
-    color: '#fff',
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-  },
-  primaryBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  primaryBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  secondaryBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  secondaryBtnText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  timestamp: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
+  outlineBtnText: { color: colors.ink, fontWeight: '600', fontSize: fontSize.sm },
+  btnDisabled:    { opacity: 0.6 },
+
+  timestamp: { fontSize: fontSize.xs, color: colors.mutedLight, textAlign: 'center', marginTop: spacing.md },
 });
