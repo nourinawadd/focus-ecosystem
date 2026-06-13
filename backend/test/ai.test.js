@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 
-// Mock the Gemini wrapper so AI tests never touch the network or need a key.
+// Mock the LLM wrapper so AI tests never touch the network or need a key.
 // We control configuration + responses per test. Hoisted above the imports.
-vi.mock('../config/gemini.js', () => ({
-  isGeminiConfigured: vi.fn(() => true),
-  generate:           vi.fn(),
-  generateJSON:       vi.fn(),
-  INSIGHT_SCHEMA:     {},
+vi.mock('../config/llm.js', () => ({
+  isLLMConfigured: vi.fn(() => true),
+  generate:        vi.fn(),
+  generateJSON:    vi.fn(),
+  INSIGHT_SCHEMA:  {},
 }));
 
 import { createApp } from '../app.js';
-import { isGeminiConfigured, generate, generateJSON } from '../config/gemini.js';
+import { isLLMConfigured, generate, generateJSON } from '../config/llm.js';
 import AIInsight from '../models/AIInsight.js';
 
 const app = createApp();
@@ -53,11 +53,11 @@ const VALID_AI = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  isGeminiConfigured.mockReturnValue(true);
+  isLLMConfigured.mockReturnValue(true);
 });
 
 describe('GET /api/ai/insights', () => {
-  it('returns a fresh (<6h) cached insight without calling Gemini', async () => {
+  it('returns a fresh (<6h) cached insight without calling the LLM', async () => {
     const { token, userId } = await makeUser();
     await AIInsight.create({ userId, insightText: 'fresh', bestProductiveHour: 8, generatedAt: new Date() });
 
@@ -88,7 +88,7 @@ describe('GET /api/ai/insights', () => {
   });
 
   it('returns 503 when the AI service is not configured', async () => {
-    isGeminiConfigured.mockReturnValue(false);
+    isLLMConfigured.mockReturnValue(false);
     const { token } = await makeUser();
     const res = await request(app).get('/api/ai/insights').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(503);
