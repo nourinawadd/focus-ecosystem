@@ -138,8 +138,9 @@ export const INSIGHT_SCHEMA = {
                     startHour: { type: SchemaType.INTEGER },
                     durationMinutes: { type: SchemaType.INTEGER },
                     confidence: { type: SchemaType.NUMBER },
+                    categoryName: { type: SchemaType.STRING },
                 },
-                required: ['day', 'startHour', 'durationMinutes', 'confidence'],
+                required: ['day', 'startHour', 'durationMinutes', 'confidence', 'categoryName'],
             },
         },
         distractionRisk: {

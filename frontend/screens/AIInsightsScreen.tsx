@@ -28,6 +28,7 @@ type Insight = {
     startHour: number;
     durationMinutes: number;
     confidence: number;
+    categoryName: string;
   }>;
   distractionRisk: {
     score: number;
@@ -298,7 +299,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
                     <View style={styles.scheduleInfo}>
                       <Text style={styles.scheduleDay}>{isToday ? 'Today' : slot.day}</Text>
                       <Text style={styles.scheduleTime}>
-                        {formatHour(slot.startHour)} · {slot.durationMinutes} min
+                        {slot.categoryName ? `${slot.categoryName} · ` : ''}{formatHour(slot.startHour)} · {slot.durationMinutes} min
                       </Text>
                     </View>
                     <Text style={styles.confidenceText}>
