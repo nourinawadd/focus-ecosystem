@@ -4,6 +4,7 @@ import {
   StyleSheet, Dimensions, Platform, Pressable,
 } from 'react-native';
 import { ScreenName, NavProps } from '../App';
+import { hSelection, hLight } from '../utils/haptics';
 
 const W = Dimensions.get('window').width * 0.80;
 
@@ -61,8 +62,12 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
       {/* Drawer panel */}
       <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
 
-        {/* User info — horizontal row */}
-        <View style={styles.userRow}>
+        {/* User info — tap to open Profile */}
+        <TouchableOpacity
+          style={styles.userRow}
+          onPress={() => { hSelection(); nav.navigate('Profile', { from: 'drawer' }); }}
+          activeOpacity={0.7}
+        >
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -70,7 +75,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
             <Text style={styles.userName}>{name}</Text>
             {email ? <Text style={styles.userEmail}>{email}</Text> : null}
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.divider} />
 
@@ -82,7 +87,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
               <TouchableOpacity
                 key={item.screen}
                 style={[styles.navItem, active && styles.navItemActive]}
-                onPress={() => nav.navigate(item.screen, { from: 'drawer' })}
+                onPress={() => { hSelection(); nav.navigate(item.screen, { from: 'drawer' }); }}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.navLabel, active && styles.navLabelActive]}>
@@ -94,7 +99,7 @@ export default function Drawer({ isOpen, onClose, currentScreen, nav, onSignOut 
         </View>
 
         {/* Sign out — fixed at bottom, plain text */}
-        <TouchableOpacity style={styles.signOut} onPress={onSignOut}>
+        <TouchableOpacity style={styles.signOut} onPress={() => { hLight(); onSignOut(); }}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
