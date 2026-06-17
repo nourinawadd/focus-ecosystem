@@ -4,7 +4,7 @@ import { colors, radii } from '../constants/theme';
 
 type Props = {
   children: React.ReactNode;
-  /** Use the dark (#1a1a1a) surface instead of white */
+  /** Use the dark (Twilight Indigo) surface instead of white */
   dark?: boolean;
   style?: ViewStyle;
   padding?: number;

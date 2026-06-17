@@ -1,30 +1,36 @@
 // ─── Colour palette ──────────────────────────────────────────────────────────
+// Brand palette (Dust Grey retired):
+//   Graphite #2F2F2F · Twilight Indigo #313852 · Pale Slate #C3CAD4
+//   Porcelain #F6F7F1 (app background)   (+ white/black as neutrals)
+// Contrast model: text on light surfaces is Indigo (primary) or Graphite
+// (secondary) — both high-contrast; Pale Slate is reserved for borders,
+// tracks, and subtle text on the dark Indigo cards.
 export const colors = {
   // Surfaces
-  bg:          '#f5f5f5',
-  darkBg:      '#0e0e0e',
-  card:        '#ffffff',
-  darkCard:    '#1a1a1a',
-  darkCardAlt: '#222222',
+  bg:          '#f4f4f4',  // 
+  darkBg:      '#2F2F2F',  // Graphite
+  card:        '#FFFFFF',  // white (neutral)
+  darkCard:    '#313852',  // Twilight Indigo
+  darkCardAlt: '#2F2F2F',  // Graphite
 
   // Text
-  ink:         '#111111',
-  inkSoft:     '#555555',
-  muted:       '#888888',
-  mutedLight:  '#aaaaaa',
-  white:       '#ffffff',
+  ink:         '#313852',  // Twilight Indigo (primary)
+  inkSoft:     '#2F2F2F',  // Graphite (secondary)
+  muted:       '#2F2F2F',  // Graphite (visible secondary labels)
+  mutedLight:  '#C3CAD4',  // Pale Slate (subtle text on dark cards)
+  white:       '#FFFFFF',
   black:       '#000000',
 
   // Borders / dividers
-  border:      '#e8e8e8',
-  darkBorder:  '#2a2a2a',
+  border:      '#C3CAD4',  // Pale Slate (visible soft border)
+  darkBorder:  '#2F2F2F',  // Graphite (subtle track on dark cards)
 
-  // Accent / status
-  lime:        '#C6F135',
-  amber:       '#F5A623',
-  danger:      '#FF5A5A',
-  success:     '#22c55e',
-  yellow:      '#f0c040',
+  // Accent / status (constrained to the brand palette)
+  lime:        '#313852',  // Twilight Indigo
+  amber:       '#313852',  // Twilight Indigo
+  danger:      '#2F2F2F',  // Graphite
+  success:     '#313852',  // Twilight Indigo
+  yellow:      '#C3CAD4',  // Pale Slate (fill on dark cards)
 } as const;
 
 // ─── Spacing scale ────────────────────────────────────────────────────────────

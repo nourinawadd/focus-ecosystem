@@ -37,7 +37,7 @@ export default function CircularProgress({
   size = 220,
   strokeWidth = 11,
   color,
-  trackColor = '#2a2a2a',
+  trackColor = '#2F2F2F',
   children,
   style,
 }: Props) {

@@ -356,7 +356,7 @@ export default function App() {
     signOut,
   };
 
-  if (!hydrated) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;
+  if (!hydrated) return <View style={{ flex: 1, backgroundColor: '#F6F7F1' }} />;
 
   return (
     <View style={{ flex: 1 }}>
