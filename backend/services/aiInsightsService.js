@@ -5,7 +5,7 @@ import User from '../models/User.js';
 import { generateJSON, isLLMConfigured, INSIGHT_SCHEMA } from '../config/llm.js';
 
 const CACHE_HOURS = 6;
-const MIN_SESSIONS = 3;
+export const MIN_SESSIONS = 3;
 
 function clampNumber(n, min, max, fallback) {
   const x = Number(n);

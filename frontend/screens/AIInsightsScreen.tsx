@@ -40,9 +40,12 @@ type Insight = {
 };
 
 type InsightResponse = {
-  insight: Insight;
-  cached: boolean;
+  insight: Insight | null;
+  cached?: boolean;
   stale?: boolean;
+  needsMoreData?: boolean;
+  sessionCount?: number;
+  sessionsNeeded?: number;
 };
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -82,6 +85,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
   const [error, setError] = useState<string | null>(null);
   const [needsMoreData, setNeedsMoreData] = useState(false);
   const [stale, setStale] = useState(false);
+  const [sessionProgress, setSessionProgress] = useState<{ count: number; needed: number } | null>(null);
 
   const name    = nav.user.name !== 'User' ? nav.user.name : (nav.params.name ?? 'User');
   const initial = name.charAt(0).toUpperCase();
@@ -92,8 +96,11 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
     setNeedsMoreData(false);
     try {
       const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
-      if (!res) {
+      if (!res || !res.insight) {
         setNeedsMoreData(true);
+        setSessionProgress(
+          res?.sessionCount != null ? { count: res.sessionCount, needed: res.sessionsNeeded ?? 3 } : null,
+        );
         setInsight(null);
       } else {
         setInsight(res.insight);
@@ -135,6 +142,9 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
       }
       if (e?.status === 400) {
         setNeedsMoreData(true);
+        setSessionProgress(
+          e?.sessionCount != null ? { count: e.sessionCount, needed: e.sessionsNeeded ?? 3 } : null,
+        );
       } else if (e?.status === 503) {
         setError('AI insights are not available right now.');
       } else {
@@ -199,8 +209,9 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
           </View>
           <Text style={styles.emptyTitle}>Not enough data yet</Text>
           <Text style={styles.emptyText}>
-            Complete at least 3 focus sessions and you'll get personalized
-            insights about your productivity patterns.
+            {sessionProgress
+              ? `You've completed ${sessionProgress.count} of ${sessionProgress.needed} sessions needed. Finish a few more and you'll get personalized insights about your productivity patterns.`
+              : "Complete at least 3 focus sessions and you'll get personalized insights about your productivity patterns."}
           </Text>
           <TouchableOpacity style={styles.inkBtn} onPress={() => nav.navigate('CreateSession')}>
             <Text style={styles.inkBtnText}>Start a session</Text>

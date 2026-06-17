@@ -1,7 +1,7 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import AIInsight from '../models/AIInsight.js';
-import { getOrGenerateInsight } from '../services/aiInsightsService.js';
+import { getOrGenerateInsight, MIN_SESSIONS } from '../services/aiInsightsService.js';
 import { getSuggestion } from '../services/aiSuggestionService.js';
 
 const router = express.Router();
@@ -17,6 +17,7 @@ function handleAIError(err, req, res) {
       message: err.message,
       code: err.code,
       sessionCount: err.sessionCount,
+      sessionsNeeded: MIN_SESSIONS,
     });
   }
   if (err.code === 'BAD_JSON') {
@@ -59,9 +60,15 @@ router.get('/insights', async (req, res) => {
       if (genErr.code === 'NOT_ENOUGH_DATA' && existing) {
         return res.json({ insight: existing, cached: true, stale: true });
       }
-      // If no insight exists at all and can't generate, return 204
+      // If no insight exists at all and can't generate, tell the client how
+      // close the user is so the empty state can show real progress.
       if (genErr.code === 'NOT_ENOUGH_DATA' && !existing) {
-        return res.status(204).end();
+        return res.json({
+          insight: null,
+          needsMoreData: true,
+          sessionCount: genErr.sessionCount,
+          sessionsNeeded: MIN_SESSIONS,
+        });
       }
       throw genErr;
     }
