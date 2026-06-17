@@ -12,6 +12,7 @@ import {
   NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { colors } from '../constants/theme';
+import { hSelection } from '../utils/haptics';
 
 const ITEM_HEIGHT = 44;
 const VISIBLE     = 5;                              // rows shown (must be odd)
@@ -38,6 +39,7 @@ export default function WheelPicker({
   const scrollRef = useRef<ScrollView>(null);
   const scrollY   = useRef(new Animated.Value(0)).current;
   const lastIndex = useRef(Math.max(0, values.indexOf(selectedValue)));
+  const tickIndex = useRef(lastIndex.current);   // drives the per-row haptic detent
 
   // Position to the initial value once, without animation.
   useEffect(() => {
@@ -51,6 +53,16 @@ export default function WheelPicker({
   }, []);
 
   const clampIndex = (i: number) => Math.min(values.length - 1, Math.max(0, i));
+
+  // Fires a light "tick" every time the centered row changes mid-scroll, so the
+  // wheel feels like a physical detent (the iOS Clock picker behaviour).
+  const onScrollTick = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = clampIndex(Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT));
+    if (i !== tickIndex.current) {
+      tickIndex.current = i;
+      hSelection();
+    }
+  };
 
   const commit = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = clampIndex(Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT));
@@ -68,12 +80,13 @@ export default function WheelPicker({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
+        disableIntervalMomentum
         bounces={false}
         nestedScrollEnabled
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true },
+          { useNativeDriver: true, listener: onScrollTick },
         )}
         // Freeze the page while the finger owns the wheel; release on lift so the
         // snap momentum can still settle and commit the final value.

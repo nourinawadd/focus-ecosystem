@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
+import { hMedium, hLight } from '../utils/haptics';
 import { signInWithGoogle, signInWithApple, isAppleAuthSupported, CANCELLED } from '../auth/social';
 
 type Errors = { email?: string; password?: string; api?: string };
@@ -30,6 +31,7 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
 
   const handleLogin = async () => {
     if (!validate() || loading) return;
+    hMedium();
     setLoading(true);
     try {
       const { accessToken, refreshToken, user } = await apiFetch<{
@@ -60,6 +62,7 @@ export default function LoginScreen({ nav }: { nav: NavProps }) {
 
   const handleSocial = async (provider: 'google' | 'apple') => {
     if (loading) return;
+    hLight();
     setLoading(true);
     setErrors({});
     try {

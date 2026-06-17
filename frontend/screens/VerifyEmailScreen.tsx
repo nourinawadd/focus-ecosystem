@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
+import { hSuccess, hError } from '../utils/haptics';
 
 const RESEND_SECONDS = 60;
 
@@ -40,10 +41,12 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
         body:   JSON.stringify({ email, code: code.trim() }),
       });
       await setTokens({ accessToken, refreshToken });
+      hSuccess();
       nav.setToken(accessToken);
       nav.updateUser({ name: user.name, email: user.email });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
+      hError();
       setError(e.message ?? 'Verification failed. Try again.');
     } finally {
       setLoading(false);
