@@ -11,9 +11,6 @@ import { colors, spacing, radii, fontSize } from '../constants/theme';
 
 type ScanPhase = 'idle' | 'scanning' | 'naming' | 'saving';
 
-// Dark slate of the "Register New Tag" button, matching the mockup.
-const SLATE = '#3a5568';
-
 export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
   const [scanPhase, setScanPhase]   = useState<ScanPhase>('idle');
   const [scannedUid, setScannedUid] = useState('');
@@ -193,9 +190,10 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
     <View style={s.screen}>
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={handleBack} hitSlop={8}>
-          <Ionicons name="arrow-back" size={20} color={colors.ink} />
+          <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </TouchableOpacity>
         <Text style={s.title}>Hardware Setup</Text>
+        <View style={s.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
@@ -363,17 +361,14 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
 const s = StyleSheet.create({
   screen:  { flex: 1, backgroundColor: colors.bg },
   header:  {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm, backgroundColor: colors.bg,
   },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    borderWidth: 1, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card,
-  },
-  title:   { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
+  backBtn:      { width: 40, height: 40, justifyContent: 'center' },
+  title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
+  headerSpacer: { width: 40 },
 
   body:         { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.xl },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 12 },
@@ -408,7 +403,7 @@ const s = StyleSheet.create({
     paddingTop: spacing.md,
   },
   registerBtn: {
-    backgroundColor: SLATE, borderRadius: radii.lg,
+    backgroundColor: colors.ink, borderRadius: radii.lg,
     paddingVertical: 18, alignItems: 'center',
   },
   registerBtnDisabled: { backgroundColor: colors.border },
