@@ -11,7 +11,7 @@ import {
   NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// import { useFonts } from 'expo-font';   // ← re-enable after the rebuild that bundles expo-font
+import { useFonts } from 'expo-font';
 // import { BlurView } from 'expo-blur';   // ← re-enable after the rebuild; importing now crashes the dev client (resolves native at import). Then delete the `BlurView` stub below + set BLUR_ENABLED = true.
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
@@ -113,12 +113,9 @@ function AuraBlob({
 
 export default function OnboardingScreen({ nav }: { nav: NavProps }) {
   const { width: W, height: H } = Dimensions.get('window');
-  // Brand wordmark font. expo-font is a native module that isn't in the current
-  // dev client, so it's disabled until the next rebuild. After rebuilding,
-  // uncomment the import above + the useFonts line below and delete the
-  // `const fontsLoaded = false` stub — the wordmark then renders in Garogier.
-  // const [fontsLoaded] = useFonts({ Garogier: require('../assets/fonts/Garogier.ttf') });
-  const fontsLoaded = false;
+  // Brand wordmark font — bundled via expo-font from the rebuild onward, so the
+  // wordmark renders in Garogier once loaded.
+  const [fontsLoaded] = useFonts({ Garogier: require('../assets/fonts/Garogier.ttf') });
   const scrollRef = useRef<ScrollView>(null);
   const scrollX   = useRef(new Animated.Value(0)).current;
   const [page, setPage] = useState(0);
