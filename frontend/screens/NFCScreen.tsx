@@ -114,7 +114,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
       <View style={styles.header}>
         {(phase === 'scanning' || phase === 'unregistered' || phase === 'error') && (
           <TouchableOpacity style={styles.backBtn} onPress={() => { cancelScan(); nav.navigate('CreateSession'); }}>
-            <Ionicons name="arrow-back" size={24} color="#111" />
+            <Ionicons name="arrow-back" size={24} color="#313852" />
           </TouchableOpacity>
         )}
       </View>
@@ -161,7 +161,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
 
         {phase === 'unregistered' && (
           <>
-            <View style={[styles.successCircle, { backgroundColor: '#F5A623' }]}>
+            <View style={[styles.successCircle, { backgroundColor: '#313852' }]}>
               <Ionicons name="alert" size={54} color="#fff" />
             </View>
             <Text style={styles.heading}>Unknown Tag</Text>
@@ -182,7 +182,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
 
         {phase === 'error' && (
           <>
-            <View style={[styles.successCircle, { backgroundColor: '#ef4444' }]}>
+            <View style={[styles.successCircle, { backgroundColor: '#2F2F2F' }]}>
               <Ionicons name="close" size={54} color="#fff" />
             </View>
             <Text style={styles.heading}>Scan Failed</Text>
@@ -199,7 +199,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f5f5', alignItems: 'center' },
+  screen: { flex: 1, backgroundColor: '#F6F7F1', alignItems: 'center' },
   header: {
     alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 60 : 44,
@@ -215,39 +215,39 @@ const styles = StyleSheet.create({
   ring: {
     position: 'absolute',
     width: 170, height: 170, borderRadius: 85,
-    backgroundColor: '#111',
+    backgroundColor: '#313852',
   },
   centerCircle: {
     width: 108, height: 108, borderRadius: 54,
-    backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: 2,
+    backgroundColor: '#313852', alignItems: 'center', justifyContent: 'center', gap: 2,
   },
   tapHint:    { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 },
-  heading:    { fontSize: 24, fontWeight: '700', color: '#111', textAlign: 'center', marginBottom: 12 },
-  subtext:    { fontSize: 15, color: '#888', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  heading:    { fontSize: 24, fontWeight: '700', color: '#313852', textAlign: 'center', marginBottom: 12 },
+  subtext:    { fontSize: 15, color: '#2F2F2F', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
   statusRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusDot:  { width: 8, height: 8, borderRadius: 4 },
-  dotScanning:{ backgroundColor: '#F5A623' },
-  statusText: { fontSize: 14, color: '#555', fontWeight: '500' },
+  dotScanning:{ backgroundColor: '#313852' },
+  statusText: { fontSize: 14, color: '#2F2F2F', fontWeight: '500' },
 
   successCircle: {
     width: 120, height: 120, borderRadius: 60,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#313852',
     alignItems: 'center', justifyContent: 'center', marginBottom: 36,
   },
   tagIdRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#e8e8e8', borderRadius: 10,
+    backgroundColor: '#313852', borderRadius: 10,
     paddingVertical: 8, paddingHorizontal: 16, marginTop: 6,
   },
-  tagIdLabel: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 },
-  tagIdValue: { fontSize: 13, fontWeight: '700', color: '#111', fontVariant: ['tabular-nums'] },
+  tagIdLabel: { fontSize: 12, fontWeight: '600', color: '#2F2F2F', textTransform: 'uppercase', letterSpacing: 0.8 },
+  tagIdValue: { fontSize: 13, fontWeight: '700', color: '#313852', fontVariant: ['tabular-nums'] },
 
   errorActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  retryBtn:     { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#111' },
+  retryBtn:     { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#313852' },
   retryBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  setupBtn:     { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#e8e8e8' },
-  setupBtnText: { fontSize: 15, fontWeight: '600', color: '#111' },
+  setupBtn:     { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#313852' },
+  setupBtnText: { fontSize: 15, fontWeight: '600', color: '#313852' },
 
   skipBtn:  { paddingBottom: 52, paddingTop: 16 },
-  skipText: { fontSize: 15, color: '#999', fontWeight: '500', textDecorationLine: 'underline' },
+  skipText: { fontSize: 15, color: '#2F2F2F', fontWeight: '500', textDecorationLine: 'underline' },
 });

@@ -187,8 +187,9 @@ export const INSIGHT_SCHEMA = {
             startHour:       { type: 'integer' },
             durationMinutes: { type: 'integer' },
             confidence:      { type: 'number' },
+            categoryName:    { type: 'string' },
           },
-          required: ['day', 'startHour', 'durationMinutes', 'confidence'],
+          required: ['day', 'startHour', 'durationMinutes', 'confidence', 'categoryName'],
         },
       },
       distractionRisk: {

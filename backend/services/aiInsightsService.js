@@ -1,10 +1,11 @@
 import Session from '../models/Session.js';
 import FocusLog from '../models/FocusLog.js';
 import AIInsight from '../models/AIInsight.js';
+import User from '../models/User.js';
 import { generateJSON, isLLMConfigured, INSIGHT_SCHEMA } from '../config/llm.js';
 
 const CACHE_HOURS = 6;
-const MIN_SESSIONS = 3;
+export const MIN_SESSIONS = 3;
 
 function clampNumber(n, min, max, fallback) {
   const x = Number(n);
@@ -21,11 +22,10 @@ async function buildUserProfile(userId) {
   const since = new Date();
   since.setDate(since.getDate() - 30);
 
-  const sessions = await Session.find({
-    userId,
-    status: 'COMPLETED',
-    startedAt: { $gte: since },
-  }).lean();
+  const [sessions, userDoc] = await Promise.all([
+    Session.find({ userId, status: 'COMPLETED', startedAt: { $gte: since } }).lean(),
+    User.findById(userId, 'categories').lean(),
+  ]);
 
   if (sessions.length < MIN_SESSIONS) {
     return { enoughData: false, sessionCount: sessions.length };
@@ -34,6 +34,12 @@ async function buildUserProfile(userId) {
   // Hourly distribution (0-23)
   const hourly = Array(24).fill(0);
   const weekday = [0, 0, 0, 0, 0, 0, 0]; // Sun..Sat minutes
+
+  // Per-category breakdown: { [categoryId]: { name, hourly[24], weekday[7] } }
+  const categoryMap = {};
+  for (const cat of (userDoc?.categories ?? [])) {
+    categoryMap[cat.id] = { name: cat.name, hourly: Array(24).fill(0), weekday: Array(7).fill(0) };
+  }
 
   let totalMinutes = 0;
   let totalScore = 0;
@@ -51,6 +57,11 @@ async function buildUserProfile(userId) {
     weekday[dow] += mins;
     totalMinutes += mins;
 
+    if (s.categoryId && categoryMap[s.categoryId]) {
+      categoryMap[s.categoryId].hourly[h] += mins;
+      categoryMap[s.categoryId].weekday[dow] += mins;
+    }
+
     if (typeof s.focusScore === 'number') {
       totalScore += s.focusScore;
       scoreCount++;
@@ -59,6 +70,16 @@ async function buildUserProfile(userId) {
     if (s.timerMode === 'POMODORO') pomodoroCount++;
     else countdownCount++;
   }
+
+  // Summarise per-category data for the prompt (only categories that have sessions)
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const categoryBreakdown = Object.values(categoryMap)
+    .filter(c => c.hourly.some(m => m > 0))
+    .map(c => {
+      const bestHour = c.hourly.indexOf(Math.max(...c.hourly));
+      const bestDay  = dayNames[c.weekday.indexOf(Math.max(...c.weekday))];
+      return { name: c.name, bestHour, bestDay, totalMins: c.hourly.reduce((a, b) => a + b, 0) };
+    });
 
   // Top distractions from focus logs
   const logs = await FocusLog.find({
@@ -87,6 +108,7 @@ async function buildUserProfile(userId) {
     pomodoroCount,
     countdownCount,
     topDistractions,
+    categoryBreakdown,
   };
 }
 
@@ -94,6 +116,17 @@ async function buildUserProfile(userId) {
 // real prompt + real model to sanity-check answer quality.
 export function buildPrompt(profile) {
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const categorySection = profile.categoryBreakdown?.length > 0
+    ? profile.categoryBreakdown.map(c =>
+        `  ${c.name}: best hour ${String(c.bestHour).padStart(2, '0')}:00, most active on ${c.bestDay}, ${c.totalMins} min total`
+      ).join('\n')
+    : '  (no category data)';
+
+  const availableCategories = profile.categoryBreakdown?.length > 0
+    ? profile.categoryBreakdown.map(c => `"${c.name}"`).join(', ')
+    : '"Focus"';
+
   return `You are a productivity coach AI analyzing a user's focus session data from the last 30 days.
 
 USER PROFILE:
@@ -109,6 +142,9 @@ ${profile.hourly.map((m, h) => `  ${String(h).padStart(2, '0')}:00 -> ${m} min`)
 WEEKDAY ACTIVITY (minutes focused per day):
 ${profile.weekday.map((m, i) => `  ${dayNames[i]}: ${m} min`).join('\n')}
 
+CATEGORY BREAKDOWN (user's session categories with their best times):
+${categorySection}
+
 TOP DISTRACTIONS:
 ${profile.topDistractions.length > 0
   ? profile.topDistractions.map(d => `  - ${d.name}: ${d.count} times`).join('\n')
@@ -119,7 +155,7 @@ Based on this data, return ONLY a JSON object with this exact shape (no markdown
   "bestProductiveHour": <integer 0-23>,
   "optimalDuration": <integer minutes, 15-120>,
   "suggestedSchedule": [
-    { "day": "<day name>", "startHour": <0-23>, "durationMinutes": <integer>, "confidence": <0-1 float> }
+    { "day": "<day name>", "startHour": <0-23>, "durationMinutes": <integer>, "confidence": <0-1 float>, "categoryName": "<category name>" }
   ],
   "distractionRisk": {
     "score": <integer 0-100>,
@@ -129,7 +165,10 @@ Based on this data, return ONLY a JSON object with this exact shape (no markdown
   "insightText": "<2-3 sentence personalized insight>"
 }
 
-Return between 2 and 5 schedule entries. Keep insightText under 280 characters.`;
+Rules for suggestedSchedule:
+- Return between 2 and 5 entries, one per day of the week (no duplicate days).
+- For categoryName use one of: ${availableCategories}. Assign whichever category historically performs best on that day/time based on the category breakdown above.
+- Keep insightText under 280 characters.`;
 }
 
 function validateAndClamp(ai) {
@@ -145,6 +184,7 @@ function validateAndClamp(ai) {
       startHour: clampNumber(s.startHour, 0, 23, 9),
       durationMinutes: clampNumber(s.durationMinutes, 15, 120, 25),
       confidence: clampNumber(s.confidence, 0, 1, 0.5),
+      categoryName: clampString(s.categoryName, 50),
     }));
   }
 

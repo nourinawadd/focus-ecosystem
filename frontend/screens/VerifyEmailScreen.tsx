@@ -88,7 +88,7 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
         <Text style={styles.label}>VERIFICATION CODE</Text>
         <TextInput
           style={styles.codeInput}
-          placeholder="••••••" placeholderTextColor="#bbb"
+          placeholder="••••••" placeholderTextColor="#C3CAD4"
           value={code}
           onChangeText={t => setCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
           keyboardType="number-pad"
@@ -122,26 +122,26 @@ export default function VerifyEmailScreen({ nav }: { nav: NavProps }) {
 }
 
 const styles = StyleSheet.create({
-  flex:           { flex: 1, backgroundColor: '#fff' },
+  flex:           { flex: 1, backgroundColor: '#F6F7F1' },
   container:      { padding: 28, paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 40 },
   logoRow:        { flexDirection: 'row', alignItems: 'center', marginBottom: 36 },
-  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#111', marginRight: 8 },
-  logoText:       { fontSize: 18, fontWeight: '700', color: '#111' },
-  title:          { fontSize: 28, fontWeight: 'bold', color: '#111', marginBottom: 6 },
-  subtitle:       { fontSize: 14, color: '#888', marginBottom: 28, lineHeight: 21 },
-  emailText:      { color: '#111', fontWeight: '600' },
-  apiError:       { color: '#e53935', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#fdecea', borderRadius: 8 },
-  infoBox:        { color: '#2e7d32', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#e8f5e9', borderRadius: 8 },
-  label:          { fontSize: 11, fontWeight: '600', color: '#888', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
+  logoCircle:     { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#313852', marginRight: 8 },
+  logoText:       { fontSize: 18, fontWeight: '700', color: '#313852' },
+  title:          { fontSize: 28, fontWeight: 'bold', color: '#313852', marginBottom: 6 },
+  subtitle:       { fontSize: 14, color: '#2F2F2F', marginBottom: 28, lineHeight: 21 },
+  emailText:      { color: '#313852', fontWeight: '600' },
+  apiError:       { color: '#2F2F2F', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#C3CAD4', borderRadius: 8 },
+  infoBox:        { color: '#313852', fontSize: 13, marginBottom: 16, padding: 10, backgroundColor: '#C3CAD4', borderRadius: 8 },
+  label:          { fontSize: 11, fontWeight: '600', color: '#2F2F2F', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
   codeInput:      {
-    borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, padding: 14,
-    fontSize: 26, fontWeight: '700', color: '#111', letterSpacing: 12,
+    borderWidth: 1, borderColor: '#C3CAD4', borderRadius: 10, padding: 14,
+    fontSize: 26, fontWeight: '700', color: '#313852', letterSpacing: 12,
     textAlign: 'center', marginBottom: 16,
   },
-  button:         { backgroundColor: '#111', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 24 },
+  button:         { backgroundColor: '#313852', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 24 },
   buttonDisabled: { opacity: 0.5 },
   buttonText:     { color: '#fff', fontSize: 16, fontWeight: '600' },
-  link:           { textAlign: 'center', fontSize: 14, color: '#888', marginBottom: 14 },
-  linkDisabled:   { color: '#bbb' },
-  linkBold:       { fontWeight: '600', color: '#111' },
+  link:           { textAlign: 'center', fontSize: 14, color: '#2F2F2F', marginBottom: 14 },
+  linkDisabled:   { color: '#C3CAD4' },
+  linkBold:       { fontWeight: '600', color: '#313852' },
 });

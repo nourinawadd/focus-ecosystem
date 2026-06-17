@@ -25,10 +25,15 @@ type Props = {
   unit?:         string;        // pinned label, e.g. 'min'
   width?:        number;
   numberWidth?:  number;        // width of the (right-aligned) number column
+  // Fired when the wheel is grabbed / released so the parent can freeze its own
+  // scroll — otherwise a vertical drag here also drags the page behind it.
+  onInteractionStart?: () => void;
+  onInteractionEnd?:   () => void;
 };
 
 export default function WheelPicker({
   values, selectedValue, onChange, unit, width = 150, numberWidth = 58,
+  onInteractionStart, onInteractionEnd,
 }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY   = useRef(new Animated.Value(0)).current;
@@ -63,11 +68,18 @@ export default function WheelPicker({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
+        bounces={false}
+        nestedScrollEnabled
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true },
         )}
+        // Freeze the page while the finger owns the wheel; release on lift so the
+        // snap momentum can still settle and commit the final value.
+        onTouchStart={onInteractionStart}
+        onTouchEnd={onInteractionEnd}
+        onTouchCancel={onInteractionEnd}
         onMomentumScrollEnd={commit}
         onScrollEndDrag={commit}
         contentContainerStyle={{ paddingVertical: PAD }}

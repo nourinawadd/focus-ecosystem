@@ -141,22 +141,23 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
 
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer}>
-          <View style={s.menuLine} /><View style={s.menuLine} /><View style={s.menuLine} />
+          <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </TouchableOpacity>
         <Text style={s.title}>Settings</Text>
         <View style={s.menuBtn} />
       </View>
 
       <Text style={s.sectionLabel}>PROFILE</Text>
-      <View style={s.card}>
+      <TouchableOpacity style={s.card} activeOpacity={0.7} onPress={() => nav.navigate('Profile')}>
         <View style={s.profileRow}>
           <View style={s.avatar}><Text style={s.avatarTxt}>{initial}</Text></View>
           <View style={s.profileInfo}>
             <Text style={s.profileName}>{user.name}</Text>
             {!!user.email && <Text style={s.profileEmail}>{user.email}</Text>}
           </View>
+          <Ionicons name="chevron-forward" size={18} color={s.rowDesc.color as string} />
         </View>
-      </View>
+      </TouchableOpacity>
 
       <Text style={s.sectionLabel}>FOCUS GOALS</Text>
       <View style={s.selectCard}>
@@ -318,7 +319,7 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
             <Text style={[s.rowLabel, s.dangerLabel]}>Delete Account</Text>
             <Text style={s.rowDesc}>Permanently erase your account and all session data</Text>
           </View>
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <Ionicons name="trash-outline" size={18} color="#ff0000" />
         </View>
       </TouchableOpacity>
 
@@ -376,7 +377,6 @@ const s = StyleSheet.create({
   container:    { paddingHorizontal: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 48 },
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   menuBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  menuLine:     { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
   title:        { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, letterSpacing: 1.2, marginBottom: 10, marginTop: 4 },
   card:         { backgroundColor: colors.card, borderRadius: radii.lg, marginBottom: spacing.lg, overflow: 'hidden', shadowColor: colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
@@ -399,7 +399,7 @@ const s = StyleSheet.create({
   chipTxtOn:    { color: colors.white, fontWeight: '600' },
 
   // Account deletion
-  dangerLabel:     { color: colors.danger },
+  dangerLabel:     { color: '#ff0000' },
   modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 32 },
   modalCard:       { backgroundColor: colors.white, borderRadius: radii.xl, padding: 24, width: '100%', maxWidth: 340 },
   modalTitle:      { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8 },

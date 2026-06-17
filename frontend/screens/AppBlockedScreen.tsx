@@ -96,10 +96,10 @@ export default function AppBlockedScreen({ nav }: { nav: NavProps }) {
         disabled={scanning}
       >
         {scanning ? (
-          <ActivityIndicator color="#111" />
+          <ActivityIndicator color="#313852" />
         ) : (
           <View style={styles.unlockInner}>
-            <Ionicons name="radio-outline" size={20} color="#111" />
+            <Ionicons name="radio-outline" size={20} color="#313852" />
             <Text style={styles.unlockText}>Tap to scan</Text>
           </View>
         )}
@@ -166,5 +166,5 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   unlockInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  unlockText:  { fontSize: 15, fontWeight: '600', color: '#111' },
+  unlockText:  { fontSize: 15, fontWeight: '600', color: '#313852' },
 });

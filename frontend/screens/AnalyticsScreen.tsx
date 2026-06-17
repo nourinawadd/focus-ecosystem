@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { apiFetch } from '../api/client';
@@ -42,20 +43,32 @@ function fmtHour(h: number | null): string {
 function BarChart({ data, maxMins, progress }: {
   data: BarItem[]; maxMins: number; progress: Animated.Value;
 }) {
+  // Dashed average line height (mean of the period's bars).
+  const avg  = data.length ? data.reduce((sum, b) => sum + b.minutes, 0) / data.length : 0;
+  const avgH = maxMins > 0 ? (avg / maxMins) * MAX_BAR_H : 0;
   return (
     <View style={bc.wrap}>
-      {data.map((item, i) => {
-        const targetH = maxMins > 0 ? (item.minutes / maxMins) * MAX_BAR_H : 0;
-        const animH   = progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetH] });
-        return (
-          <View key={i} style={bc.col}>
-            <View style={bc.track}>
+      {/* Day labels on top */}
+      <View style={bc.labels}>
+        {data.map((item, i) => (
+          <Text key={i} style={bc.lbl}>{item.label}</Text>
+        ))}
+      </View>
+
+      {/* Plot: dashed gridlines + bars over a solid baseline */}
+      <View style={bc.plot}>
+        {avg > 0 && <View style={[bc.avgLine, { bottom: avgH }]} />}
+        {data.map((item, i) => {
+          const targetH = maxMins > 0 ? (item.minutes / maxMins) * MAX_BAR_H : 0;
+          const animH   = progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetH] });
+          return (
+            <View key={i} style={bc.col}>
+              <View style={bc.grid} />
               <Animated.View style={[bc.bar, { height: animH }]} />
             </View>
-            <Text style={bc.lbl}>{item.label}</Text>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -98,9 +111,7 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
 
       <View style={s.header}>
         <TouchableOpacity style={s.menuBtn} onPress={nav.openDrawer} activeOpacity={0.7}>
-          <View style={s.menuLine} />
-          <View style={s.menuLine} />
-          <View style={s.menuLine} />
+          <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </TouchableOpacity>
         <Text style={s.title}>Analytics</Text>
         <View style={s.avatar}>
@@ -203,11 +214,25 @@ export default function AnalyticsScreen({ nav }: { nav: NavProps }) {
 }
 
 const bc = StyleSheet.create({
-  wrap:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: MAX_BAR_H + 28, marginTop: spacing.lg },
-  col:   { alignItems: 'center', flex: 1 },
-  track: { width: 18, height: MAX_BAR_H, justifyContent: 'flex-end', backgroundColor: colors.border, borderRadius: 6, overflow: 'hidden' },
-  bar:   { width: 18, backgroundColor: colors.ink, borderRadius: 6 },
-  lbl:   { fontSize: 10, color: colors.muted, marginTop: 6, fontWeight: '600' },
+  wrap:    { marginTop: spacing.lg },
+  labels:  { flexDirection: 'row', marginBottom: spacing.sm },
+  lbl:     { flex: 1, textAlign: 'center', fontSize: 11, color: colors.muted, fontWeight: '600' },
+  plot:    {
+    flexDirection: 'row', alignItems: 'flex-end', height: MAX_BAR_H,
+    borderBottomWidth: 1.5, borderBottomColor: colors.border,
+  },
+  col:     { flex: 1, height: MAX_BAR_H, alignItems: 'center', justifyContent: 'flex-end' },
+  // Vertical dashed gridline centred on each column.
+  grid:    {
+    position: 'absolute', top: 0, bottom: 0, left: '50%', width: 0,
+    borderLeftWidth: 1, borderStyle: 'dashed', borderColor: colors.border,
+  },
+  bar:     { width: 28, backgroundColor: colors.ink, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
+  // Horizontal dashed average line across the plot.
+  avgLine: {
+    position: 'absolute', left: 0, right: 0, height: 0,
+    borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.border,
+  },
 });
 
 const s = StyleSheet.create({
@@ -220,7 +245,6 @@ const s = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   menuBtn:    { width: 40, height: 40, justifyContent: 'center' },
-  menuLine:   { width: 22, height: 2.5, backgroundColor: colors.ink, borderRadius: 2, marginBottom: 5 },
   title:      { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
   avatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.md },

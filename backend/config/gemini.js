@@ -27,6 +27,10 @@ export async function generate(prompt, { maxRetries = 2, timeoutMs = 30000 } = {
             temperature: 0.4,
             topP: 0.9,
             maxOutputTokens: 512,
+            // gemini-2.5-flash thinks by default and thinking tokens count
+            // against maxOutputTokens — disable it so the budget goes to
+            // the actual answer, not hidden reasoning.
+            thinkingConfig: { thinkingBudget: 0 },
         },
     });
 
@@ -70,6 +74,10 @@ export async function generateJSON(prompt, schema = null, { maxRetries = 2, time
         topP: 0.8,
         maxOutputTokens: 1024,
         responseMimeType: 'application/json', // ← the most important fix
+        // Same thinking-budget issue as generate() above — structured JSON
+        // extraction doesn't need reasoning, and thinking tokens were eating
+        // the whole maxOutputTokens budget, leaving truncated/empty JSON.
+        thinkingConfig: { thinkingBudget: 0 },
     };
 
     if (schema) generationConfig.responseSchema = schema;
@@ -138,8 +146,9 @@ export const INSIGHT_SCHEMA = {
                     startHour: { type: SchemaType.INTEGER },
                     durationMinutes: { type: SchemaType.INTEGER },
                     confidence: { type: SchemaType.NUMBER },
+                    categoryName: { type: SchemaType.STRING },
                 },
-                required: ['day', 'startHour', 'durationMinutes', 'confidence'],
+                required: ['day', 'startHour', 'durationMinutes', 'confidence', 'categoryName'],
             },
         },
         distractionRisk: {

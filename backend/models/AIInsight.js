@@ -15,6 +15,7 @@ const AIInsightSchema = new mongoose.Schema({
     startHour:       { type: Number, min: 0, max: 23 },
     durationMinutes: { type: Number },
     confidence:      { type: Number, min: 0, max: 1 },
+    categoryName:    { type: String, default: '' },
     _id: false,
   }],
 

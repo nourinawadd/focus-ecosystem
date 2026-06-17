@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
 import SectionLabel from '../components/SectionLabel';
-import PillBadge from '../components/PillBadge';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr, fmtHHMM } from '../store/sessions';
 import { apiFetch } from '../api/client';
@@ -158,6 +157,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         </Card>
       )}
 
+
       {/* ── Smart Suggestion (AI-powered, with local fallback) ─────────────── */}
       <TouchableOpacity activeOpacity={0.85} onPress={() => nav.navigate('AIInsights')}>
         <Card style={styles.mb14} padding={18}>
@@ -196,11 +196,11 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
 
 const styles = StyleSheet.create({
   screen:     { flex: 1, backgroundColor: colors.bg },
-  container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
+  container:  { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 78 : 58, paddingBottom: 52 },
 
-  header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  menuBtn:   { width: 38, height: 38, marginLeft: -6, justifyContent: 'center', alignItems: 'center' },
+  header:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xl },
+  headerLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  menuBtn:   { width: 38, height: 38, marginLeft: -6, marginTop: -6, justifyContent: 'center', alignItems: 'center' },
   focusDay:  { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
   dashTitle: { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
   avatar:    { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   scoreCard:          { marginBottom: 14 },
   scoreLabelOverride: { color: colors.mutedLight, marginBottom: spacing.sm },
   scoreValue: { color: colors.white, fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
-  scoreMax:   { fontSize: fontSize.xl, color: '#666', fontWeight: 'normal' },
+  scoreMax:   { fontSize: fontSize.xl, color: '#C3CAD4', fontWeight: 'normal' },
   progressTrack: { height: 6, backgroundColor: colors.darkBorder, borderRadius: 3, overflow: 'hidden' },
   progressFill:  { height: 6, backgroundColor: colors.yellow, borderRadius: 3 },
 

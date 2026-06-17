@@ -28,6 +28,7 @@ type Insight = {
     startHour: number;
     durationMinutes: number;
     confidence: number;
+    categoryName: string;
   }>;
   distractionRisk: {
     score: number;
@@ -39,9 +40,12 @@ type Insight = {
 };
 
 type InsightResponse = {
-  insight: Insight;
-  cached: boolean;
+  insight: Insight | null;
+  cached?: boolean;
   stale?: boolean;
+  needsMoreData?: boolean;
+  sessionCount?: number;
+  sessionsNeeded?: number;
 };
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -81,6 +85,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
   const [error, setError] = useState<string | null>(null);
   const [needsMoreData, setNeedsMoreData] = useState(false);
   const [stale, setStale] = useState(false);
+  const [sessionProgress, setSessionProgress] = useState<{ count: number; needed: number } | null>(null);
 
   const name    = nav.user.name !== 'User' ? nav.user.name : (nav.params.name ?? 'User');
   const initial = name.charAt(0).toUpperCase();
@@ -91,8 +96,13 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
     setNeedsMoreData(false);
     try {
       const res = await apiFetch<InsightResponse | null>('/ai/insights', nav.token);
-      if (!res) {
+      // A 204 (not enough data, no prior insight) comes back as an empty {} from
+      // apiFetch, not null — so guard on the payload, not just the response.
+      if (!res || !res.insight) {
         setNeedsMoreData(true);
+        setSessionProgress(
+          res?.sessionCount != null ? { count: res.sessionCount, needed: res.sessionsNeeded ?? 3 } : null,
+        );
         setInsight(null);
       } else {
         setInsight(res.insight);
@@ -134,6 +144,9 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
       }
       if (e?.status === 400) {
         setNeedsMoreData(true);
+        setSessionProgress(
+          e?.sessionCount != null ? { count: e.sessionCount, needed: e.sessionsNeeded ?? 3 } : null,
+        );
       } else if (e?.status === 503) {
         setError('AI insights are not available right now.');
       } else {
@@ -163,33 +176,39 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
 
   const risk = insight ? riskMeta(insight.distractionRisk.level) : null;
 
+  // ── Header (mirrors History / Create Session: back-arrow drawer + centered title) ──
+  const header = (
+    <View style={styles.header}>
+      <TouchableOpacity style={styles.backBtn} onPress={nav.openDrawer} activeOpacity={0.7}>
+        <Ionicons name="arrow-back" size={24} color={colors.ink} />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>AI Insights</Text>
+      <TouchableOpacity style={styles.avatar} onPress={() => nav.navigate('Profile')}>
+        <Text style={styles.avatarText}>{initial}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator size="large" color={colors.ink} />
-        <Text style={styles.loadingText}>Analyzing your sessions…</Text>
+      <View style={styles.screen}>
+        {header}
+        <View style={[styles.center, styles.loadingFill]}>
+          <ActivityIndicator size="large" color={colors.ink} />
+          <Text style={styles.loadingText}>Analyzing your sessions…</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />}
-    >
-      {/* ── Header (mirrors Dashboard) ─────────────────────────────────────── */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>LAST 30 DAYS</Text>
-          <Text style={styles.title}>AI Insights</Text>
-        </View>
-        <TouchableOpacity style={styles.avatar} onPress={nav.openDrawer}>
-          <Text style={styles.avatarText}>{initial}</Text>
-        </TouchableOpacity>
-      </View>
-
+    <View style={styles.screen}>
+      {header}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ink} />}
+      >
       {/* ── Empty state — not enough data ──────────────────────────────────── */}
       {needsMoreData && (
         <Card style={styles.centerCard} padding={spacing.xxl}>
@@ -198,8 +217,9 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
           </View>
           <Text style={styles.emptyTitle}>Not enough data yet</Text>
           <Text style={styles.emptyText}>
-            Complete at least 3 focus sessions and you'll get personalized
-            insights about your productivity patterns.
+            {sessionProgress
+              ? `You've completed ${sessionProgress.count} of ${sessionProgress.needed} sessions needed. Finish a few more and you'll get personalized insights about your productivity patterns.`
+              : "Complete at least 3 focus sessions and you'll get personalized insights about your productivity patterns."}
           </Text>
           <TouchableOpacity style={styles.inkBtn} onPress={() => nav.navigate('CreateSession')}>
             <Text style={styles.inkBtnText}>Start a session</Text>
@@ -298,7 +318,7 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
                     <View style={styles.scheduleInfo}>
                       <Text style={styles.scheduleDay}>{isToday ? 'Today' : slot.day}</Text>
                       <Text style={styles.scheduleTime}>
-                        {formatHour(slot.startHour)} · {slot.durationMinutes} min
+                        {slot.categoryName ? `${slot.categoryName} · ` : ''}{formatHour(slot.startHour)} · {slot.durationMinutes} min
                       </Text>
                     </View>
                     <Text style={styles.confidenceText}>
@@ -333,21 +353,28 @@ export default function AIInsightsScreen({ nav }: { nav: NavProps }) {
           <Text style={styles.timestamp}>Updated {timeAgo(insight.generatedAt)}</Text>
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen:    { flex: 1, backgroundColor: colors.bg },
-  container: { padding: spacing.xl, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 52 },
+  container: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: 52 },
   center:    { justifyContent: 'center', alignItems: 'center' },
+  loadingFill: { flex: 1 },
   loadingText: { marginTop: spacing.sm, color: colors.muted, fontSize: fontSize.sm },
 
-  header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
-  eyebrow:    { fontSize: fontSize.xs, fontWeight: '600', color: colors.muted, letterSpacing: 1.5, marginBottom: 2 },
-  title:      { fontSize: fontSize.xxxl, fontWeight: 'bold', color: colors.ink },
-  avatar:     { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: colors.white, fontWeight: '700', fontSize: fontSize.lg },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingTop: Platform.OS === 'ios' ? 60 : 44,
+    paddingBottom: spacing.sm, backgroundColor: colors.bg,
+  },
+  backBtn:     { width: 40, height: 40, justifyContent: 'center' },
+  headerTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.ink },
+  avatar:      { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.ink, justifyContent: 'center', alignItems: 'center' },
+  avatarText:  { color: colors.white, fontWeight: '700', fontSize: fontSize.md },
 
   mb14: { marginBottom: 14 },
 
@@ -364,10 +391,10 @@ const styles = StyleSheet.create({
   // Stale banner (matches the amber note style used elsewhere)
   staleBanner: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: '#fff8e1', borderRadius: radii.md,
+    backgroundColor: '#C3CAD4', borderRadius: radii.md,
     paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md, marginBottom: 14,
   },
-  staleText: { flex: 1, fontSize: fontSize.xs, color: '#8a6d00', lineHeight: 16 },
+  staleText: { flex: 1, fontSize: fontSize.xs, color: '#2F2F2F', lineHeight: 16 },
 
   // Hero
   heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },

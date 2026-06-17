@@ -140,6 +140,8 @@ export async function apiFetch<T = unknown>(
     const err: any = new Error(data.message ?? `Request failed (${res.status})`);
     err.status = res.status;
     err.code   = data.code;   // machine-readable error code (e.g. EMAIL_UNVERIFIED)
+    err.sessionCount  = data.sessionCount;
+    err.sessionsNeeded = data.sessionsNeeded;
     throw err;
   }
   return data as T;

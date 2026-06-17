@@ -28,7 +28,7 @@ import {
 } from 'anchor-live-activity';
 
 // Slate background of the focus screen (matches the dark blue-grey mockup).
-const SLATE      = '#2f4257';
+const SLATE      = '#313852';
 const RING_TRACK = 'rgba(255,255,255,0.12)';
 const RING_ARC   = 'rgba(255,255,255,0.92)';
 
@@ -664,7 +664,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
             {nfcPhase === 'unregistered' && (
               <>
                 <View style={styles.modalWarnIcon}>
-                  <Ionicons name="alert-circle" size={48} color="#F5A623" />
+                  <Ionicons name="alert-circle" size={48} color="#313852" />
                 </View>
                 <Text style={styles.modalTitle}>Unknown Tag</Text>
                 <Text style={styles.modalSub}>

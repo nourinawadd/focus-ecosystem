@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   Switch, StyleSheet, Platform, Alert, TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import Card from '../components/Card';
@@ -29,6 +30,9 @@ const DURATIONS = [15, 25, 30, 45, 60, 90];
 const HOURS   = Array.from({ length: 9 },  (_, i) => i);   // 0–8 hours
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);   // 0–59 min
 
+// Remember the last duration dialed on the wheels (like the iOS Clock timer).
+const LAST_DURATION_KEY = '@anchor:lastDuration';
+
 const POMO_PRESETS = [
   { label: '25 / 5',  work: 25, brk: 5  },
   { label: '50 / 10', work: 50, brk: 10 },
@@ -49,6 +53,10 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   const [duration, setDuration] = useState(() =>
     DURATIONS.includes(nav.user.preferredDuration) ? nav.user.preferredDuration : 25,
   );
+  // Disables the page scroll while a duration wheel is being dragged, so the
+  // gesture stays in the wheel instead of moving the whole screen.
+  const [wheelActive, setWheelActive] = useState(false);
+  const durationHydrated = useRef(false);
   const [pomodoro,   setPomodoro]   = useState(() => nav.user.pomodoroEnabled);
   const [pomoPreset, setPomoPreset] = useState<PomoPreset>(POMO_PRESETS[0]);
   const [pomoRounds, setPomoRounds] = useState(2);
@@ -65,6 +73,25 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   useEffect(() => {
     refreshCategories();
   }, []);
+
+  // Restore the last duration dialed on the wheels, then persist any change.
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(LAST_DURATION_KEY);
+        const n = saved ? parseInt(saved, 10) : NaN;
+        if (Number.isFinite(n) && n > 0) setDuration(n);
+      } catch {
+        // ignore — fall back to the default duration
+      }
+      durationHydrated.current = true;
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!durationHydrated.current) return;
+    AsyncStorage.setItem(LAST_DURATION_KEY, String(duration)).catch(() => {});
+  }, [duration]);
 
   useEffect(() => {
     if (!screenTimeNativeReady()) return;
@@ -371,8 +398,12 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!wheelActive}
+      >
+
         {/* Category badge */}
         <Card style={styles.categoryBadge} padding={spacing.md}>
           <Ionicons name="folder" size={20} color={colors.ink} />
@@ -401,6 +432,8 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 unit="hours"
                 width={150}
                 onChange={h => setDuration(h * 60 + (duration % 60))}
+                onInteractionStart={() => setWheelActive(true)}
+                onInteractionEnd={() => setWheelActive(false)}
               />
               <WheelPicker
                 values={MINUTES}
@@ -408,6 +441,8 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 unit="min"
                 width={150}
                 onChange={m => setDuration(Math.floor(duration / 60) * 60 + m)}
+                onInteractionStart={() => setWheelActive(true)}
+                onInteractionEnd={() => setWheelActive(false)}
               />
             </View>
           </>
