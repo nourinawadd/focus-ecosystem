@@ -9,6 +9,7 @@ import { toDateStr, fmtHHMM } from '../store/sessions';
 import CircularProgress from '../components/CircularProgress';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import { hLight, hMedium, hSuccess } from '../utils/haptics';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
 import { scheduleSessionAlert, cancelSessionAlert } from '../notifications';
 import {
@@ -459,6 +460,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       }
     }
 
+    finalStatus === 'COMPLETED' ? hSuccess() : hMedium();
     nav.navigate('SessionComplete', {
       ...nav.params,
       actualMinutes: String(actualMinutes),
@@ -592,7 +594,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
         <View style={styles.controlRow}>
           <TouchableOpacity
             style={styles.pausePill}
-            onPress={() => setRunning(r => !r)}
+            onPress={() => { hLight(); setRunning(r => !r); }}
             activeOpacity={0.8}
             disabled={remaining === 0}
           >
@@ -602,7 +604,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
 
           <TouchableOpacity
             style={styles.stopPill}
-            onPress={() => (hasNfc ? openNfcEndModal() : confirmEnd())}
+            onPress={() => { hMedium(); hasNfc ? openNfcEndModal() : confirmEnd(); }}
             activeOpacity={0.8}
           >
             <Ionicons name="stop" size={13} color={colors.danger} />
@@ -716,9 +718,9 @@ const styles = StyleSheet.create({
   stopPill:  {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 9, paddingHorizontal: spacing.xl,
-    borderRadius: radii.full, borderWidth: 1, borderColor: 'rgba(255,90,90,0.4)',
+    borderRadius: radii.full, borderWidth: 1, borderColor: '#ff0000',
   },
-  stopPillText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: '600' },
+  stopPillText: { color: "#ff0000", fontSize: fontSize.sm, fontWeight: '600' },
 
   blockedCard: {
     flexDirection: 'row', alignItems: 'center',

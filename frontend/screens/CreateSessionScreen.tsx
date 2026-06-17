@@ -11,6 +11,7 @@ import SectionLabel from '../components/SectionLabel';
 import WheelPicker from '../components/WheelPicker';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import { hSelection, hLight, hMedium } from '../utils/haptics';
 import { SessionCategory } from '../store/user';
 import {
   isSupported as screenTimeSupported,
@@ -149,6 +150,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   };
 
   const selectCategory = (cat: SessionCategory) => {
+    hSelection();
     setSelectedCategory(cat);
     setScreenState('session-create');
     setSessionName('');
@@ -454,7 +456,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 <TouchableOpacity
                   key={p.label}
                   style={[styles.durationChip, pomoPreset.label === p.label && styles.durationChipActive]}
-                  onPress={() => setPomoPreset(p)}
+                  onPress={() => { hSelection(); setPomoPreset(p); }}
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.durationChipText, pomoPreset.label === p.label && styles.durationChipTextActive]}>
@@ -473,7 +475,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 <TouchableOpacity
                   key={r}
                   style={[styles.durationChip, pomoRounds === r && styles.durationChipActive]}
-                  onPress={() => setPomoRounds(r)}
+                  onPress={() => { hSelection(); setPomoRounds(r); }}
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.durationChipText, pomoRounds === r && styles.durationChipTextActive]}>
@@ -495,7 +497,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 : '25 min focus · 5 min break'}
             </Text>
           </View>
-          <Switch value={pomodoro} onValueChange={setPomodoro} trackColor={{ true: colors.ink }} thumbColor={colors.white} />
+          <Switch value={pomodoro} onValueChange={v => { hLight(); setPomodoro(v); }} trackColor={{ true: colors.ink }} thumbColor={colors.white} />
         </Card>
 
         {/* Screen Time real blocking (iOS only) */}
@@ -531,7 +533,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
         {nav.userTags.length > 0 ? (
           <TouchableOpacity
             style={styles.nfcBtn}
-            onPress={() => startParams && nav.navigate('NFCScan', startParams)}
+            onPress={() => { hMedium(); startParams && nav.navigate('NFCScan', startParams); }}
             activeOpacity={0.8}
           >
             <Text style={styles.nfcBtnText}>Start with NFC</Text>
@@ -540,7 +542,7 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
           <>
             <TouchableOpacity
               style={styles.nfcBtn}
-              onPress={() => startParams && nav.navigate('ActiveSession', startParams)}
+              onPress={() => { hMedium(); startParams && nav.navigate('ActiveSession', startParams); }}
               activeOpacity={0.8}
             >
               <Text style={styles.nfcBtnText}>Start</Text>

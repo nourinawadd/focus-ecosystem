@@ -7,6 +7,7 @@ import SectionLabel from '../components/SectionLabel';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { toDateStr, daysAgo, computeStreak, computeFocusHours } from '../store/sessions';
 import { apiFetch } from '../api/client';
+import { hSelection } from '../utils/haptics';
 
 // ─── Filter type ──────────────────────────────────────────────────────────────
 type HistoryFilter = 'Today' | 'Week' | 'Month';
@@ -160,7 +161,7 @@ export default function HistoryScreen({ nav }: { nav: NavProps }) {
           <TouchableOpacity
             key={f}
             style={[main.filterBtn, histFilter === f && main.filterBtnOn]}
-            onPress={() => setHistFilter(f)}
+            onPress={() => { hSelection(); setHistFilter(f); }}
             activeOpacity={0.75}
           >
             <Text style={[main.filterTxt, histFilter === f && main.filterTxtOn]}>{f}</Text>

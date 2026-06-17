@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavProps, UserTag } from '../App';
 import { apiFetch } from '../api/client';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import { hMedium, hSuccess, hWarning, hError } from '../utils/haptics';
 import { colors, spacing, radii, fontSize } from '../constants/theme';
 
 type ScanPhase = 'idle' | 'scanning' | 'naming' | 'saving';
@@ -75,6 +76,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       Alert.alert('NFC Not Available', 'This device does not support NFC.');
       return;
     }
+    hMedium();
     setScanPhase('scanning');
     startPulse();
     try {
@@ -84,11 +86,13 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       // Check if already registered on this account
       const already = nav.userTags.some(t => t.tagId.uid === uid);
       if (already) {
+        hWarning();
         Alert.alert('Already Registered', 'This tag is already linked to your account.');
         setScanPhase('idle');
         return;
       }
 
+      hSuccess();
       setScannedUid(uid);
       setLabelInput('');
       setScanPhase('naming');
@@ -97,6 +101,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       setScanPhase('idle');
       const msg: string = e?.message ?? String(e) ?? '';
       if (!/cancel/i.test(msg)) {
+        hError();
         Alert.alert('Scan Failed', msg || 'NFC scan failed. Try again.');
       }
     }
@@ -119,6 +124,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
         method: 'POST',
         body: JSON.stringify({ uid: scannedUid, label }),
       });
+      hSuccess();
       nav.refreshTags();
       setScanPhase('idle');
       setScannedUid('');
@@ -126,6 +132,7 @@ export default function NFCSetupScreen({ nav }: { nav: NavProps }) {
       if (cameFromNewSession) nav.navigate('CreateSession');
     } catch (e: any) {
       setScanPhase('naming');
+      hError();
       Alert.alert('Error', e?.message ?? 'Failed to save tag. Try again.');
     }
   };

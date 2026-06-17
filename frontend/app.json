@@ -22,7 +22,7 @@
         "NSSupportsLiveActivities": true,
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "39",
+      "buildNumber": "40",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -73,7 +73,8 @@
         {
           "appleTeamId": "SGMRDRZ92B"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "owner": "maro2233",
     "extra": {

@@ -10,6 +10,7 @@ import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import { hSelection, hLight } from '../utils/haptics';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 
@@ -34,7 +35,7 @@ function ChipRow<T extends string | number>({
           <TouchableOpacity
             key={String(opt)}
             style={[s.chip, on && s.chipOn]}
-            onPress={() => onSelect(opt)}
+            onPress={() => { hSelection(); onSelect(opt); }}
             activeOpacity={0.75}
           >
             <Text style={[s.chipTxt, on && s.chipTxtOn]}>
@@ -56,7 +57,7 @@ function ToggleRow({ label, desc, value, onChange }: {
         <Text style={s.rowLabel}>{label}</Text>
         <Text style={s.rowDesc}>{desc}</Text>
       </View>
-      <Switch value={value} onValueChange={onChange}
+      <Switch value={value} onValueChange={v => { hLight(); onChange(v); }}
         trackColor={{ false: colors.border, true: colors.ink }} thumbColor={colors.white} />
     </View>
   );
