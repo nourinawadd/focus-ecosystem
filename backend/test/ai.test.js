@@ -81,10 +81,14 @@ describe('GET /api/ai/insights', () => {
     expect(res.body.insight.insightText).toBe('old');
   });
 
-  it('returns 204 when there is no insight and not enough data', async () => {
+  it('reports progress when there is no insight and not enough data', async () => {
     const { token } = await makeUser();
     const res = await request(app).get('/api/ai/insights').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    expect(res.body.insight).toBe(null);
+    expect(res.body.needsMoreData).toBe(true);
+    expect(res.body.sessionCount).toBe(0);
+    expect(res.body.sessionsNeeded).toBe(3);
   });
 
   it('returns 503 when the AI service is not configured', async () => {
