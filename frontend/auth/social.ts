@@ -39,7 +39,7 @@ export const CANCELLED = Symbol('social-auth-cancelled');
 export type AuthResult = {
   accessToken:  string;
   refreshToken: string;
-  user:         { name: string; email: string };
+  user:         { name: string; email: string; hasPassword?: boolean };
 };
 
 export async function signInWithGoogle(): Promise<AuthResult | typeof CANCELLED> {

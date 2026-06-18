@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { apiFetch, setTokens } from '../api/client';
+import { hMedium, hLight } from '../utils/haptics';
 import { signInWithGoogle, signInWithApple, isAppleAuthSupported, CANCELLED } from '../auth/social';
 
 type Errors = { name?: string; email?: string; password?: string; api?: string };
@@ -33,6 +34,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
 
   const handleSignUp = async () => {
     if (!validate() || loading) return;
+    hMedium();
     setLoading(true);
     try {
       const res = await apiFetch<{
@@ -53,7 +55,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
       };
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Registration failed. Please try again.' });
@@ -64,6 +66,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
 
   const handleSocial = async (provider: 'google' | 'apple') => {
     if (loading) return;
+    hLight();
     setLoading(true);
     setErrors({});
     try {
@@ -74,7 +77,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
       const { accessToken, refreshToken, user } = result;
       await setTokens({ accessToken, refreshToken });
       nav.setToken(accessToken);
-      nav.updateUser({ name: user.name, email: user.email });
+      nav.updateUser({ name: user.name, email: user.email, hasPassword: user.hasPassword });
       nav.replace('Dashboard', { name: user.name, email: user.email });
     } catch (e: any) {
       setErrors({ api: e.message ?? 'Sign-in failed. Please try again.' });
@@ -104,6 +107,7 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.name && styles.inputError]}
           placeholder="Alex Chen" placeholderTextColor="#C3CAD4"
           value={name} onChangeText={setName}
+          textContentType="name" autoComplete="name"
         />
         {errors.name && <Text style={styles.error}>{errors.name}</Text>}
 
@@ -112,7 +116,8 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.email && styles.inputError]}
           placeholder="alex@university.edu" placeholderTextColor="#C3CAD4"
           value={email} onChangeText={setEmail}
-          keyboardType="email-address" autoCapitalize="none"
+          keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+          textContentType="emailAddress" autoComplete="email"
         />
         {errors.email && <Text style={styles.error}>{errors.email}</Text>}
 
@@ -121,7 +126,8 @@ export default function SignUpScreen({ nav }: { nav: NavProps }) {
           style={[styles.input, errors.password && styles.inputError]}
           placeholder="••••••" placeholderTextColor="#C3CAD4"
           value={password} onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry autoCapitalize="none" autoCorrect={false}
+          textContentType="newPassword" autoComplete="new-password"
         />
         {errors.password && <Text style={styles.error}>{errors.password}</Text>}
 

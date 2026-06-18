@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NavProps } from '../App';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import { hSuccess, hWarning, hError } from '../utils/haptics';
 
 type Phase = 'scanning' | 'success' | 'error' | 'unregistered';
 
@@ -48,6 +49,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
 
   const playSuccess = (id: string) => {
     stopPulse();
+    hSuccess();
     setTagId(id);
     setPhase('success');
     Animated.sequence([
@@ -83,6 +85,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
       // Validate against the user's registered tags
       const match = nav.userTags.find(t => t.tagId.uid === uid);
       if (!match) {
+        hWarning();
         setTagId(uid);
         setPhase('unregistered');
         return;
@@ -98,6 +101,7 @@ export default function NFCScreen({ nav }: { nav: NavProps }) {
         startPulse();
         return;
       }
+      hError();
       setErrMsg(msg || 'NFC scan failed.');
       setPhase('error');
     }

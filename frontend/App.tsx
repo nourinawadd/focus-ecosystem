@@ -4,11 +4,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { SessionRecord } from './store/sessions';
 import { UserProfile, DEFAULT_USER, UserTag } from './store/user';
-import { View, Animated } from 'react-native';
+import { View, Animated, PanResponder } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { hLight } from './utils/haptics';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ChangePasswordScreen from './screens/ChangePasswordScreen';
+import OnboardingScreen, { INTRO_ONBOARDING_KEY } from './screens/OnboardingScreen';
 import OnboardingScreenTimeScreen, { SCREEN_TIME_ONBOARDING_KEY } from './screens/OnboardingScreenTimeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -34,8 +38,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 
 export type ScreenName =
-  | 'SignUp' | 'Login' | 'VerifyEmail' | 'OnboardingScreenTime'
-  | 'Dashboard' | 'Profile' | 'Settings'
+  | 'Onboarding' | 'SignUp' | 'Login' | 'VerifyEmail' | 'ForgotPassword' | 'OnboardingScreenTime'
+  | 'Dashboard' | 'Profile' | 'Settings' | 'ChangePassword'
   | 'CreateSession' | 'NFCScan' | 'ActiveSession' | 'SessionComplete'
   | 'History' | 'Analytics' | 'AIInsights' | 'NFCSetup';
 
@@ -61,8 +65,13 @@ export type NavProps = {
 export type { SessionRecord, UserProfile, UserTag };
 
 const COMING_SOON: ScreenName[] = [];
-const NO_DRAWER:   ScreenName[] = ['SignUp', 'Login', 'VerifyEmail', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
-const DARK_STATUS: ScreenName[] = ['ActiveSession'];
+const NO_DRAWER:   ScreenName[] = ['Onboarding', 'SignUp', 'Login', 'VerifyEmail', 'ForgotPassword', 'ChangePassword', 'OnboardingScreenTime', 'NFCScan', 'ActiveSession', 'SessionComplete'];
+const DARK_STATUS: ScreenName[] = ['Onboarding', 'ActiveSession'];
+
+// TEMP — set to true to always open on the intro onboarding while developing.
+// Resets the "seen" flag and ignores the saved session. Flip back to false
+// (or leave it; it's a no-op) before shipping.
+const FORCE_ONBOARDING = false;
 
 export default function App() {
   const [current,    setCurrent]    = useState<ScreenName>('SignUp');
@@ -74,6 +83,21 @@ export default function App() {
   const [token,      setTokenState] = useState<string | null>(null);
   const [hydrated,   setHydrated]   = useState(false);
 
+  // Swipe-from-left-edge to open the drawer. The thin strip on the left claims
+  // the gesture only once it's a clear rightward drag (so vertical scrolls and
+  // taps pass straight through to the screen underneath).
+  const edgeSwipe = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e, g) =>
+        g.dx > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onPanResponderRelease: (_e, g) => {
+        if (g.dx > 45 && g.vx >= 0) { hLight(); setDrawerOpen(true); }
+      },
+      onPanResponderTerminationRequest: () => true,
+    }),
+  ).current;
+
   // Token persistence lives in api/client (it owns the access+refresh pair and
   // the rotation logic). App only mirrors the access token into state to gate
   // screens and re-trigger data fetches.
@@ -81,17 +105,30 @@ export default function App() {
     setTokenState(t);
   }, []);
 
-  // Restore persisted tokens on app launch.
+  // Restore persisted tokens on app launch. A logged-out, first-time install
+  // sees the intro onboarding before sign-up; everyone else lands as before.
   useEffect(() => {
-    loadTokens()
-      .then(({ accessToken }) => {
+    (async () => {
+      try {
+        if (FORCE_ONBOARDING) {
+          await AsyncStorage.removeItem(INTRO_ONBOARDING_KEY).catch(() => {});
+          setCurrent('Onboarding');
+          return;
+        }
+        const { accessToken } = await loadTokens();
         if (accessToken) {
           setTokenState(accessToken);
           setCurrent('Dashboard');
+        } else {
+          const seen = await AsyncStorage.getItem(INTRO_ONBOARDING_KEY);
+          if (!seen) setCurrent('Onboarding');
         }
-      })
-      .catch(console.error)
-      .finally(() => setHydrated(true));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setHydrated(true);
+      }
+    })();
   }, []);
 
   const addSession = useCallback(
@@ -298,12 +335,13 @@ export default function App() {
       .then(setUserTags)
       .catch(console.error);
 
-    apiFetch<{ name: string; email: string; createdAt?: string; settings: Record<string, any> }>('/user/me', token)
+    apiFetch<{ name: string; email: string; createdAt?: string; hasPassword?: boolean; settings: Record<string, any> }>('/user/me', token)
       .then(me => {
         updateUser({
           name:                 me.name,
           email:                me.email,
           createdAt:            me.createdAt,
+          hasPassword:          me.hasPassword,
           dailyGoalMinutes:     me.settings?.dailyGoalMinutes     ?? 120,
           weeklyGoalMinutes:    me.settings?.weeklyGoalMinutes     ?? 600,
           preferredDuration:    me.settings?.defaultDuration       ?? 25,
@@ -363,9 +401,12 @@ export default function App() {
       <StatusBar style={DARK_STATUS.includes(current) ? 'light' : 'dark'} />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        {current === 'Onboarding'      && <OnboardingScreen nav={nav} />}
         {current === 'SignUp'          && <SignUpScreen nav={nav} />}
         {current === 'Login'           && <LoginScreen nav={nav} />}
         {current === 'VerifyEmail'     && <VerifyEmailScreen nav={nav} />}
+        {current === 'ForgotPassword'  && <ForgotPasswordScreen nav={nav} />}
+        {current === 'ChangePassword'  && <ChangePasswordScreen nav={nav} />}
         {current === 'OnboardingScreenTime' && <OnboardingScreenTimeScreen nav={nav} />}
         {current === 'Dashboard'       && <DashboardScreen nav={nav} />}
         {current === 'Profile'         && <ProfileScreen nav={nav} />}
@@ -380,6 +421,13 @@ export default function App() {
         {current === 'NFCSetup'        && <NFCSetupScreen nav={nav} />}
         {COMING_SOON.includes(current) && <ComingSoonScreen nav={nav} screen={current} />}
       </Animated.View>
+
+      {!NO_DRAWER.includes(current) && !drawerOpen && (
+        <View
+          {...edgeSwipe.panHandlers}
+          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 24 }}
+        />
+      )}
 
       {!NO_DRAWER.includes(current) && (
         <Drawer

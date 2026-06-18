@@ -13,6 +13,7 @@ import { apiFetch } from '../api/client';
 import {
   isCalendarSupported, isCalendarSyncEnabled, setCalendarSyncEnabled, requestCalendarPermission,
 } from '../utils/calendar';
+import { hSelection, hLight } from '../utils/haptics';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 
@@ -37,7 +38,7 @@ function ChipRow<T extends string | number>({
           <TouchableOpacity
             key={String(opt)}
             style={[s.chip, on && s.chipOn]}
-            onPress={() => onSelect(opt)}
+            onPress={() => { hSelection(); onSelect(opt); }}
             activeOpacity={0.75}
           >
             <Text style={[s.chipTxt, on && s.chipTxtOn]}>
@@ -59,7 +60,7 @@ function ToggleRow({ label, desc, value, onChange }: {
         <Text style={s.rowLabel}>{label}</Text>
         <Text style={s.rowDesc}>{desc}</Text>
       </View>
-      <Switch value={value} onValueChange={onChange}
+      <Switch value={value} onValueChange={v => { hLight(); onChange(v); }}
         trackColor={{ false: colors.border, true: colors.ink }} thumbColor={colors.white} />
     </View>
   );
@@ -404,7 +405,9 @@ const s = StyleSheet.create({
   modalCard:       { backgroundColor: colors.white, borderRadius: radii.xl, padding: 24, width: '100%', maxWidth: 340 },
   modalTitle:      { fontSize: fontSize.xl - 1, fontWeight: '700', color: colors.ink, marginBottom: 8 },
   modalSub:        { fontSize: fontSize.sm, color: colors.muted, lineHeight: 20, marginBottom: 16 },
-  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16, letterSpacing: 2 },
+  // No letterSpacing: on iOS it spaces out the placeholder ("D E L E T E") and
+  // lags typing — a known iOS TextInput rendering/perf bug.
+  modalInput:      { borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, fontSize: fontSize.md, color: colors.ink, marginBottom: 16 },
   modalActions:    { flexDirection: 'row', gap: 12 },
   modalCancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: radii.md, backgroundColor: colors.border },
   modalCancelText: { fontSize: fontSize.md, fontWeight: '600', color: colors.inkSoft },

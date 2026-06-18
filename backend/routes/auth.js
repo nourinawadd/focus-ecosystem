@@ -7,7 +7,8 @@ import RefreshToken from '../models/RefreshToken.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 import { signAccess, signRefresh, hashToken } from '../utils/jwt.js';
 import { verifyGoogleToken, verifyAppleToken } from '../utils/socialAuth.js';
-import { sendVerificationEmail } from '../utils/mailer.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -40,6 +41,20 @@ async function issueVerificationCode(user) {
   await sendVerificationEmail(user.email, code);   // best-effort; never throws
 }
 
+// Same as above for the password-reset code (stored in the separate
+// passwordReset sub-document) and emailed via the reset template.
+async function issueResetCode(user) {
+  const code = generateCode();
+  user.passwordReset = {
+    codeHash:   await bcrypt.hash(code, 10),
+    expiresAt:  new Date(Date.now() + VERIFICATION_TTL_MS),
+    attempts:   0,
+    lastSentAt: new Date(),
+  };
+  await user.save();
+  await sendPasswordResetEmail(user.email, code);   // best-effort; never throws
+}
+
 // Dummy hash compared against when no user is found, so /login takes the same
 // time whether or not the email exists (mitigates user-enumeration timing).
 const DUMMY_HASH = bcrypt.hashSync('timing-attack-placeholder', 12);
@@ -50,6 +65,9 @@ const publicUser = (user) => ({
   name:     user.name,
   email:    user.email,
   settings: user.settings,
+  // Lets the app distinguish password accounts from social-only ones (e.g. to
+  // show/hide "Change password"). Never exposes the hash itself.
+  hasPassword: !!user.passwordHash,
 });
 
 // Issue a fresh access+refresh pair and persist the refresh token's hash.
@@ -248,6 +266,80 @@ router.post('/resend-code', loginLimiter, asyncHandler(async (req, res) => {
   res.json({ sent: true });
 }));
 
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+// Body: { email }. Verifies the email belongs to a real account and 404s with
+// NO_ACCOUNT otherwise, so the app can tell the user up-front rather than send
+// them to enter a code that will never arrive. (This deliberately trades away
+// account-enumeration resistance for clearer UX; the IP rate limiter still caps
+// probing.) A real send is throttled to one per RESEND_COOLDOWN_MS. Works for
+// social-only accounts too: they own the verified email, so a reset lets them
+// add password login.
+router.post('/forgot-password', loginLimiter, asyncHandler(async (req, res) => {
+  const email = (req.body.email ?? '').trim().toLowerCase();
+  if (!email)
+    return res.status(400).json({ message: 'email is required' });
+
+  const user = await User.findOne({ email });
+  if (!user)
+    return res.status(404).json({ message: 'No account found with that email', code: 'NO_ACCOUNT' });
+
+  const last = user.passwordReset?.lastSentAt?.getTime() ?? 0;
+  if (Date.now() - last < RESEND_COOLDOWN_MS)
+    return res.status(429).json({ message: 'Please wait a minute before requesting another code' });
+
+  await issueResetCode(user);
+  res.json({ sent: true });
+}));
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+// Body: { email, code, newPassword }. Verifies the emailed code, sets the new
+// password, and (since the user proved control of the inbox) marks the email
+// verified. All existing refresh tokens are revoked, then a fresh pair is
+// returned so the flow auto-logs-in. Unknown email / wrong code share an
+// identical response to avoid account enumeration.
+router.post('/reset-password', loginLimiter, asyncHandler(async (req, res) => {
+  const email       = (req.body.email ?? '').trim().toLowerCase();
+  const code        = String(req.body.code ?? '').trim();
+  const newPassword = req.body.newPassword ?? '';
+
+  if (!email || !code || !newPassword)
+    return res.status(400).json({ message: 'email, code and newPassword are required' });
+  if (newPassword.length < MIN_PASSWORD)
+    return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD} characters` });
+
+  const user = await User.findOne({ email });
+  if (!user || !user.passwordReset?.codeHash)
+    return res.status(400).json({ message: 'Invalid email or code' });
+
+  const r = user.passwordReset;
+  if (r.expiresAt && r.expiresAt.getTime() < Date.now())
+    return res.status(400).json({ message: 'Code expired — request a new one', code: 'CODE_EXPIRED' });
+  if (r.attempts >= MAX_VERIFY_ATTEMPTS)
+    return res.status(400).json({ message: 'Too many attempts — request a new code', code: 'CODE_LOCKED' });
+
+  // Count the attempt before comparing so a hammering client can't race it.
+  user.passwordReset.attempts += 1;
+  await user.save();
+
+  if (!(await bcrypt.compare(code, r.codeHash)))
+    return res.status(400).json({ message: 'Invalid email or code' });
+
+  // pre('save') hashes the plaintext assignment.
+  user.passwordHash  = newPassword;
+  user.emailVerified = true;
+  user.passwordReset = { codeHash: null, expiresAt: null, attempts: 0, lastSentAt: null };
+  await user.save();
+
+  // Burn every existing session — a reset should invalidate anything an
+  // attacker might have established.
+  await RefreshToken.updateMany(
+    { userId: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+
+  res.json(await issueTokens(user, req));
+}));
+
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const email    = (req.body.email ?? '').trim().toLowerCase();
@@ -362,6 +454,48 @@ router.post('/apple', socialLimiter, asyncHandler(async (req, res) => {
     emailVerified:  identity.emailVerified && identity.email != null,
     name,
   });
+  res.json(await issueTokens(user, req));
+}));
+
+// ─── POST /api/auth/change-password ──────────────────────────────────────────
+// Authenticated. Body: { currentPassword, newPassword }. Verifies the current
+// password, sets the new one, then revokes every existing refresh token and
+// issues a fresh pair — so other devices are signed out while this one stays in
+// via the returned tokens. Social-only accounts (no passwordHash) get a 400
+// with code NO_PASSWORD and should use the forgot-password flow to set one.
+router.post('/change-password', auth, asyncHandler(async (req, res) => {
+  const currentPassword = req.body.currentPassword ?? '';
+  const newPassword     = req.body.newPassword ?? '';
+
+  // req.user comes from the auth middleware with passwordHash stripped — reload
+  // the full doc so we can compare and save.
+  const user = await User.findById(req.user._id);
+  if (!user)
+    return res.status(401).json({ message: 'User not found' });
+
+  if (!user.passwordHash)
+    return res.status(400).json({ message: 'This account has no password. Use “Forgot password” to set one.', code: 'NO_PASSWORD' });
+
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+  if (newPassword.length < MIN_PASSWORD)
+    return res.status(400).json({ message: `Password must be at least ${MIN_PASSWORD} characters` });
+
+  if (!(await user.comparePassword(currentPassword)))
+    return res.status(400).json({ message: 'Current password is incorrect', code: 'WRONG_PASSWORD' });
+
+  if (await user.comparePassword(newPassword))
+    return res.status(400).json({ message: 'New password must be different from the current one' });
+
+  user.passwordHash = newPassword;   // pre('save') hashes it
+  await user.save();
+
+  // Revoke all existing sessions, then hand this device a fresh pair.
+  await RefreshToken.updateMany(
+    { userId: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+
   res.json(await issueTokens(user, req));
 }));
 

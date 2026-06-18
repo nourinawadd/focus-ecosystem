@@ -99,6 +99,13 @@ export default function ProfileScreen({ nav }: { nav: NavProps }) {
         </View>
       </View>
 
+      {/* Change password — password accounts only (hidden for social-only) */}
+      {user.hasPassword && (
+        <TouchableOpacity style={styles.changePwBtn} onPress={() => nav.navigate('ChangePassword')}>
+          <Text style={styles.changePwText}>Change Password</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Logout */}
       <TouchableOpacity style={styles.logoutBtn} onPress={nav.signOut}>
         <Text style={styles.logoutText}>Log Out</Text>
@@ -143,6 +150,11 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 16, alignItems: 'center' },
   statValue: { fontSize: 22, fontWeight: 'bold', color: '#313852', marginBottom: 2 },
   statLabel: { fontSize: 11, color: '#2F2F2F', textAlign: 'center' },
+  changePwBtn: {
+    borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#313852', backgroundColor: '#fff', marginBottom: 12,
+  },
+  changePwText: { color: '#313852', fontSize: 16, fontWeight: '600' },
   logoutBtn: {
     borderRadius: 14, paddingVertical: 16, alignItems: 'center',
     borderWidth: 1.5, borderColor: '#ff0000', backgroundColor: '#fff',

@@ -75,6 +75,19 @@ const UserSchema = new mongoose.Schema({
     default: () => ({}),
   },
 
+  // Forgot-password flow. Kept separate from `verification` so a pending email
+  // verification and a password reset can't clobber each other. Same shape:
+  // a bcrypt-hashed 6-digit code with TTL, attempt locking and a resend anchor.
+  passwordReset: {
+    type: new mongoose.Schema({
+      codeHash:   { type: String, default: null },
+      expiresAt:  { type: Date,   default: null },
+      attempts:   { type: Number, default: 0 },
+      lastSentAt: { type: Date,   default: null },
+    }, { _id: false }),
+    default: () => ({}),
+  },
+
   notifyState: {
     type: new mongoose.Schema({
       summaryDateStr: { type: String, default: '' },
@@ -104,7 +117,8 @@ UserSchema.methods.comparePassword = function (candidate) {
 UserSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.passwordHash;
-  delete obj.verification;   // never expose the code hash / attempt state
+  delete obj.verification;    // never expose the code hash / attempt state
+  delete obj.passwordReset;   // ditto for the reset code
   return obj;
 };
 

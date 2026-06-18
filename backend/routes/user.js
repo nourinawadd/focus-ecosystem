@@ -49,7 +49,12 @@ const NOTIFY_VALIDATORS = {
 };
 
 // ─── GET /api/user/me ─────────────────────────────────────────────────────────
-router.get('/me', (req, res) => res.json(req.user));
+// req.user has passwordHash stripped by the auth middleware, so derive the
+// hasPassword flag with a tiny extra lookup (the hash itself is never exposed).
+router.get('/me', asyncHandler(async (req, res) => {
+  const withHash = await User.findById(req.user._id).select('passwordHash').lean();
+  res.json({ ...req.user.toJSON(), hasPassword: !!withHash?.passwordHash });
+}));
 
 // ─── PATCH /api/user/settings ─────────────────────────────────────────────────
 // Body: any subset of the settings sub-document fields.

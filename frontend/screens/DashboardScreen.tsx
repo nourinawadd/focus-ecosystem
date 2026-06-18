@@ -7,6 +7,7 @@ import SectionLabel from '../components/SectionLabel';
 import { colors, spacing, fontSize, radii } from '../constants/theme';
 import { computeStreak, computeFocusHours, computeTodayScore, computeDailyProgress, toDateStr, fmtHHMM } from '../store/sessions';
 import { apiFetch } from '../api/client';
+import { hMedium } from '../utils/haptics';
 import type { SessionRecord } from '../App';
 import { isCalendarSyncEnabled, getTodayEvents, type CalendarEvent } from '../utils/calendar';
 
@@ -185,7 +186,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
       </TouchableOpacity>
 
       {/* ── Start CTA ─────────────────────────────────────────────────────── */}
-      <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => nav.navigate('CreateSession')}>
+      <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => { hMedium(); nav.navigate('CreateSession'); }}>
         <Text style={styles.startBtnText}>Start Focus Session</Text>
       </TouchableOpacity>
 
