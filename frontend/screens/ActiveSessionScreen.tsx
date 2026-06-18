@@ -465,7 +465,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       ...nav.params,
       actualMinutes: String(actualMinutes),
       focusScore:    String(finalScore),
-      blockedCount:  String(blockedApps.length),
+      blockedCount:  String(stCount > 0 ? stCount : blockedApps.length),
       distractions:  String(distractionsVal),
       streak,
     });

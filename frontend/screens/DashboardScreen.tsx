@@ -75,14 +75,14 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── Focus Score Card (dark) ────────────────────────────────────────── */}
+      {/* ── Streak Card (dark) ─────────────────────────────────────────────── */}
       <Card dark style={styles.scoreCard} padding={22}>
-        <SectionLabel noTopMargin style={styles.scoreLabelOverride}>Today's Focus Score</SectionLabel>
-        <Text style={styles.scoreValue}>
-          {SCORE}<Text style={styles.scoreMax}> /100</Text>
-        </Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${SCORE}%` as any }]} />
+        <SectionLabel noTopMargin style={styles.scoreLabelOverride}>Current Streak</SectionLabel>
+        <View style={styles.streakRow}>
+          <Text style={styles.scoreValue}>
+            {streak}<Text style={styles.scoreMax}> {streak === 1 ? 'day' : 'days'}</Text>
+          </Text>
+          <Ionicons name="flame" size={34} color={colors.yellow} style={styles.streakFlame} />
         </View>
       </Card>
 
@@ -91,7 +91,7 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         {[
           [String(totalSessions), 'Sessions'],
           [focusHours,            'Hours'   ],
-          [`${streak}d`,          'Streak'  ],
+          [String(SCORE),         'Score'   ],
         ].map(([val, label]) => (
           <Card key={label} style={styles.statCard} padding={spacing.lg}>
             <Text style={styles.statValue}>{val}</Text>
@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
 
   scoreCard:          { marginBottom: 14 },
   scoreLabelOverride: { color: colors.mutedLight, marginBottom: spacing.sm },
-  scoreValue: { color: colors.white, fontSize: fontSize.display, fontWeight: 'bold', marginBottom: 18 },
+  scoreValue: { color: colors.white, fontSize: fontSize.display, fontWeight: 'bold' },
   scoreMax:   { fontSize: fontSize.xl, color: '#C3CAD4', fontWeight: 'normal' },
-  progressTrack: { height: 6, backgroundColor: colors.darkBorder, borderRadius: 3, overflow: 'hidden' },
-  progressFill:  { height: 6, backgroundColor: colors.yellow, borderRadius: 3 },
+  streakRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  streakFlame: { marginBottom: 4 },
 
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statCard: { flex: 1 },
