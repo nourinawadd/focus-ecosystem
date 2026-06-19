@@ -19,12 +19,14 @@ import './models/FocusLog.js';
 import './models/Statistics.js';
 import './models/AIInsight.js';
 import './models/RefreshToken.js';
+import './models/WaitlistSignup.js';
 
 import authRoutes      from './routes/auth.js';
 import userRoutes      from './routes/user.js';
 import sessionRoutes   from './routes/sessions.js';
 import analyticsRoutes from './routes/analytics.js';
 import aiRoutes        from './routes/ai.js';
+import landingRoutes   from './routes/landing.js';
 import errorHandler    from './middleware/errorHandler.js';
 import logger          from './utils/logger.js';
 import { getLLMStatus } from './config/llm.js';
@@ -53,6 +55,7 @@ export function createApp() {
   app.use('/api/sessions',  sessionRoutes);
   app.use('/api/analytics', analyticsRoutes);
   app.use('/api/ai',        aiRoutes);
+  app.use('/api/landing',   landingRoutes);
 
   // Liveness + readiness: 503 unless the Mongo connection is actually up.
   // `ai` reports the primary LLM provider (the Gemini fallback hides its
