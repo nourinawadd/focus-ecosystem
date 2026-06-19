@@ -1,6 +1,6 @@
 // frontend/screens/SettingsScreen.tsx
 // User preferences. Every change is immediately synced to PATCH /user/settings.
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, Switch, TouchableOpacity, StyleSheet, ScrollView, Platform,
   Modal, TextInput, ActivityIndicator, Alert,
@@ -10,6 +10,9 @@ import { NavProps, UserProfile } from '../App';
 import { DAILY_GOAL_OPTIONS, WEEKLY_GOAL_OPTIONS } from '../store/user';
 import { colors, fontSize, spacing, radii } from '../constants/theme';
 import { apiFetch } from '../api/client';
+import {
+  isCalendarSupported, isCalendarSyncEnabled, setCalendarSyncEnabled, requestCalendarPermission,
+} from '../utils/calendar';
 import { hSelection, hLight } from '../utils/haptics';
 
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
@@ -72,6 +75,28 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
   const [confirmText, setConfirmText] = useState('');
   const [deleting,    setDeleting]    = useState(false);
   const deleteArmed = confirmText.trim().toUpperCase() === 'DELETE';
+
+  // Calendar sync — local device preference, gated by iOS Calendar permission.
+  const [calendarSyncEnabled, setCalendarSyncEnabledState] = useState(false);
+
+  useEffect(() => {
+    isCalendarSyncEnabled().then(setCalendarSyncEnabledState);
+  }, []);
+
+  const onToggleCalendarSync = async (next: boolean) => {
+    if (next) {
+      const granted = await requestCalendarPermission();
+      if (!granted) {
+        Alert.alert(
+          'Calendar access needed',
+          'Anchor needs Calendar access to show today\'s schedule and add your completed sessions. You can grant this in iOS Settings.',
+        );
+        return;
+      }
+    }
+    await setCalendarSyncEnabled(next);
+    setCalendarSyncEnabledState(next);
+  };
 
   const deleteAccount = async () => {
     if (!deleteArmed || !token) return;
@@ -176,6 +201,20 @@ export default function SettingsScreen({ nav }: { nav: NavProps }) {
           onChange={v => updateAndSync({ pomodoroEnabled: v })}
         />
       </View>
+
+      {isCalendarSupported() && (
+        <>
+          <Text style={s.sectionLabel}>INTEGRATIONS</Text>
+          <View style={s.card}>
+            <ToggleRow
+              label="Sync with Calendar"
+              desc="Show today's calendar events on your Dashboard and add completed sessions to a dedicated Anchor calendar"
+              value={calendarSyncEnabled}
+              onChange={onToggleCalendarSync}
+            />
+          </View>
+        </>
+      )}
 
       <Text style={s.sectionLabel}>PREFERENCES</Text>
       <View style={s.card}>

@@ -19,10 +19,12 @@
       "infoPlist": {
         "NFCReaderUsageDescription": "Anchor uses NFC to verify your physical presence at your focus location during sessions.",
         "NSFamilyControlsUsageDescription": "Anchor uses Screen Time to shield distracting apps during your focus sessions.",
+        "NSCalendarsUsageDescription": "Anchor uses your Calendar to show today's schedule and to add your completed focus sessions as events.",
+        "NSCalendarsFullAccessUsageDescription": "Anchor uses your Calendar to show today's schedule and to add your completed focus sessions as events.",
         "NSSupportsLiveActivities": true,
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "41",
+      "buildNumber": "44",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true
@@ -78,10 +80,8 @@
       ],
       "expo-font"
     ],
-    "owner": "maro2233",
     "extra": {
       "eas": {
-        "projectId": "12d77c6e-1eaa-40f9-8915-f4aef923b60b",
         "build": {
           "experimental": {
             "ios": {
@@ -89,12 +89,18 @@
                 {
                   "bundleIdentifier": "dev.gradproject.anchor.widget",
                   "targetName": "AnchorWidget"
+                },
+                {
+                  "bundleIdentifier": "dev.gradproject.anchor.widget",
+                  "targetName": "AnchorWidget"
                 }
               ]
             }
           }
-        }
+        },
+        "projectId": "3ffd430d-973f-43b2-8cfa-250af97bf5c2"
       }
-    }
+    },
+    "owner": "hagarsalehh"
   }
 }

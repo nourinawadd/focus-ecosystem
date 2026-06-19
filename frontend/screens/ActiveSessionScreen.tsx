@@ -11,6 +11,7 @@ import { colors, spacing, radii, fontSize } from '../constants/theme';
 import { apiFetch } from '../api/client';
 import { hLight, hMedium, hSuccess } from '../utils/haptics';
 import { initNFC, readTag, cancelScan, isNFCSupported } from '../utils/nfc';
+import { addSessionEvent } from '../utils/calendar';
 import { scheduleSessionAlert, cancelSessionAlert } from '../notifications';
 import {
   isSupported as screenTimeSupported,
@@ -458,6 +459,15 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
       } catch {
         // Network failure — continue with local values
       }
+    }
+
+    if (finalStatus === 'COMPLETED') {
+      addSessionEvent({
+        title:     sessionName,
+        startDate: new Date(endedAt.getTime() - actualMinutes * 60_000),
+        endDate:   endedAt,
+        notes:     `Focus score: ${finalScore}/100`,
+      }).catch(() => {});
     }
 
     finalStatus === 'COMPLETED' ? hSuccess() : hMedium();
