@@ -125,20 +125,6 @@ export default function DashboardScreen({ nav }: { nav: NavProps }) {
         </View>
       </Card>
 
-      {/* ── Next Session (uses user preferred settings) ───────────────────── */}
-      <Card style={styles.mb14} padding={18}>
-        <SectionLabel noTopMargin>Next Session</SectionLabel>
-        <View style={styles.sessionRow}>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={styles.sessionTitle}>Focus Session</Text>
-            <Text style={styles.sessionSub}>
-              {user.preferredDuration} min{user.pomodoroEnabled ? ' · Pomodoro' : ''}
-            </Text>
-          </View>
-          <PillBadge label="Study" bg={colors.ink} color={colors.white} />
-        </View>
-      </Card>
-
       {/* ── Today's Schedule (from iOS Calendar, if sync enabled) ──────────── */}
       {todayEvents !== null && (
         <Card style={styles.mb14} padding={18}>
@@ -226,9 +212,6 @@ const styles = StyleSheet.create({
   goalSub:    { fontSize: fontSize.sm, color: colors.muted, marginBottom: spacing.sm },
   goalTrack:  { height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
   goalFill:   { height: 6, backgroundColor: colors.ink, borderRadius: 3 },
-  sessionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sessionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.ink, marginBottom: 4 },
-  sessionSub:   { fontSize: fontSize.sm, color: colors.muted },
 
   scheduleEmpty: { fontSize: fontSize.sm, color: colors.muted },
   scheduleRow:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },

@@ -56,10 +56,14 @@ export function fmtHHMM(d: Date): string {
 }
 
 // ─── Aggregate helpers ────────────────────────────────────────────────────────
-/** Consecutive days (from today backwards) that have at least one completed session */
+/** Consecutive days (from today backwards) that have at least one completed session.
+ *  Today having no session yet does NOT break the streak — it's only broken once a
+ *  full day passes with no session. So if there's nothing logged today, we start
+ *  counting from yesterday and keep the streak alive. */
 export function computeStreak(sessions: SessionRecord[]): number {
   const done = new Set(sessions.filter(s => s.completed).map(s => s.dateStr));
   const d = new Date();
+  if (!done.has(toDateStr(d))) d.setDate(d.getDate() - 1);
   let streak = 0;
   while (done.has(toDateStr(d))) {
     streak++;
