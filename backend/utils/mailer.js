@@ -187,3 +187,57 @@ export async function sendContactEmail({ topic, name, email, message }) {
     return false;
   }
 }
+
+/**
+ * Confirmation auto-reply to whoever submitted the contact form, so they get an
+ * acknowledgement instead of silence. Best-effort; never throws.
+ */
+export async function sendContactAckEmail(to, name) {
+  if (!process.env.BREVO_API_KEY) {
+    logger.warn({ to }, 'BREVO_API_KEY not set — contact ack email skipped');
+    return false;
+  }
+  const greeting = name ? `Hi ${String(name).replace(/[<>&]/g, '')},` : 'Hi there,';
+  try {
+    const res = await fetch(BREVO_URL, {
+      method:  'POST',
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender:  sender(),
+        to:      [{ email: to }],
+        replyTo: { email: CONTACT_TO, name: 'Anchor' },
+        subject: 'Thanks for reaching out to Anchor',
+        htmlContent: `
+          <div style="background:#f2f5f7;padding:32px 16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;">
+            <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #d4e0e8;border-radius:16px;overflow:hidden;">
+              <div style="background:#313852;padding:24px 32px;text-align:center;">
+                <span style="color:#fff;font-size:22px;font-weight:700;letter-spacing:.5px;">Anchor</span>
+              </div>
+              <div style="padding:32px 32px 8px;">
+                <h1 style="margin:0 0 12px;font-size:22px;color:#0f1e27;">Thanks for getting in touch.</h1>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">${greeting}</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">We have your message and someone on the team will get back to you soon. If you need to add anything, just reply to this email and it reaches us directly.</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">While you wait, Anchor is live on TestFlight if you would like to try it:</p>
+                <div style="text-align:center;margin:24px 0;">
+                  <a href="${TESTFLIGHT_URL}" style="display:inline-block;background:#313852;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:99px;">Open the TestFlight beta</a>
+                </div>
+                <p style="margin:0 0 2px;font-size:15px;color:#4a5e6a;">Talk soon,</p>
+                <p style="margin:0 0 22px;font-size:15px;color:#0f1e27;font-weight:600;">The Anchor team</p>
+              </div>
+              <div style="border-top:1px solid #d4e0e8;padding:16px 32px;background:#f8fafb;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#7a909c;">You're getting this because you contacted us through the Anchor site. Questions? <a href="mailto:${CONTACT_TO}" style="color:#4a8fa8;">${CONTACT_TO}</a></p>
+              </div>
+            </div>
+          </div>`,
+      }),
+    });
+    if (!res.ok) {
+      logger.error({ to, status: res.status, body: await res.text() }, 'Brevo contact ack failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ to, err: err.message }, 'Brevo contact ack threw');
+    return false;
+  }
+}

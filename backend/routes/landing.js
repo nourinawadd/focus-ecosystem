@@ -6,7 +6,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import WaitlistSignup from '../models/WaitlistSignup.js';
 import asyncHandler from '../middleware/asyncHandler.js';
-import { sendBetaInviteEmail, sendContactEmail } from '../utils/mailer.js';
+import { sendBetaInviteEmail, sendContactEmail, sendContactAckEmail } from '../utils/mailer.js';
 
 const router = express.Router();
 
@@ -55,12 +55,14 @@ router.post('/contact', formLimiter, asyncHandler(async (req, res) => {
   if (cleanMsg.length < 5)
     return res.status(400).json({ message: 'Please add a short message.' });
 
+  const cleanName = String(name || '').trim().slice(0, 120);
   await sendContactEmail({
     topic:   String(topic || 'General').slice(0, 60),
-    name:    String(name || '').trim().slice(0, 120),
+    name:    cleanName,
     email:   cleanEmail,
     message: cleanMsg.slice(0, 4000),
   });
+  await sendContactAckEmail(cleanEmail, cleanName);   // confirmation to the sender; best-effort
   res.json({ ok: true });
 }));
 
