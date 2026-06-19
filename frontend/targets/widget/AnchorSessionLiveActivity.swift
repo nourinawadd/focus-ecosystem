@@ -4,7 +4,6 @@ import WidgetKit
 
 // Brand palette (mirrors frontend/constants/theme.ts — Dust Grey retired)
 private let anchorIndigo    = Color(red: 0x31 / 255, green: 0x38 / 255, blue: 0x52 / 255) // Twilight Indigo
-private let anchorGraphite  = Color(red: 0x2F / 255, green: 0x2F / 255, blue: 0x2F / 255) // Graphite
 private let anchorSlate     = Color(red: 0xC3 / 255, green: 0xCA / 255, blue: 0xD4 / 255) // Pale Slate
 private let anchorPorcelain = Color(red: 0xF6 / 255, green: 0xF7 / 255, blue: 0xF1 / 255) // Porcelain
 
@@ -107,7 +106,7 @@ private struct RoundDots: View {
   }
 }
 
-// ─── Lock Screen / banner card (light Porcelain, indigo time) ─────────────────
+// ─── Lock Screen / banner card (indigo background, light time + anchor mark) ──
 
 private struct LockScreenCard: View {
   let context: ActivityViewContext<AnchorSessionAttributes>
@@ -117,17 +116,25 @@ private struct LockScreenCard: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top) {
         VStack(alignment: .leading, spacing: 4) {
-          Text(context.attributes.sessionName)
-            .font(.headline)
-            .foregroundStyle(anchorIndigo)
-            .lineLimit(1)
-          PhaseBadge(state: state, tint: anchorIndigo)
+          HStack(spacing: 6) {
+            Image("AnchorLogo")
+              .renderingMode(.template)
+              .resizable()
+              .scaledToFit()
+              .frame(width: 16, height: 16)
+              .foregroundStyle(anchorPorcelain)
+            Text(context.attributes.sessionName)
+              .font(.headline)
+              .foregroundStyle(anchorPorcelain)
+              .lineLimit(1)
+          }
+          PhaseBadge(state: state, tint: anchorSlate)
         }
         Spacer()
         CountdownText(state: state)
           .font(.system(size: 34, weight: .bold, design: .rounded))
           .monospacedDigit()
-          .foregroundStyle(anchorIndigo)
+          .foregroundStyle(anchorPorcelain)
           .multilineTextAlignment(.trailing)
           .frame(maxWidth: 124)
       }
@@ -135,26 +142,27 @@ private struct LockScreenCard: View {
       if state.isComplete {
         Text("Great work — open Anchor to see your results.")
           .font(.caption)
-          .foregroundStyle(anchorGraphite)
+          .foregroundStyle(anchorSlate)
       } else if context.attributes.isPomo {
-        RoundDots(attributes: context.attributes, state: state, tint: anchorIndigo, dim: anchorGraphite)
+        RoundDots(attributes: context.attributes, state: state, tint: anchorPorcelain, dim: anchorSlate)
       } else if !state.paused {
         ProgressView(timerInterval: state.timerRange, countsDown: false)
           .progressViewStyle(.linear)
-          .tint(anchorIndigo)
+          .tint(anchorSlate)
           .labelsHidden()
       }
     }
     .padding(16)
-    .activityBackgroundTint(anchorPorcelain)
-    .activitySystemActionForegroundColor(anchorIndigo)
+    .activityBackgroundTint(anchorIndigo)
+    .activitySystemActionForegroundColor(anchorPorcelain)
   }
 }
 
 // ─── Widget configuration ─────────────────────────────────────────────────────
 // Note: the Dynamic Island is rendered on the device's black hardware pill and
-// its background can't be themed — so its text uses Pale Slate (the light brand
-// tint) for legibility, with an Indigo keyline for the brand glow.
+// its background can't be themed (an iOS limitation — unlike the Lock Screen
+// card, there is no indigo fill) — so its text uses Pale Slate (the light brand
+// tint) for legibility, with a lighter Pale Slate keyline for the brand glow.
 
 struct AnchorSessionLiveActivity: Widget {
   var body: some WidgetConfiguration {
@@ -166,10 +174,18 @@ struct AnchorSessionLiveActivity: Widget {
         DynamicIslandExpandedRegion(.leading) {
           VStack(alignment: .leading, spacing: 4) {
             PhaseBadge(state: state, tint: anchorSlate)
-            Text(context.attributes.sessionName)
-              .font(.caption)
-              .foregroundStyle(anchorSlate)
-              .lineLimit(1)
+            HStack(spacing: 5) {
+              Image("AnchorLogo")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+                .foregroundStyle(anchorSlate)
+              Text(context.attributes.sessionName)
+                .font(.caption)
+                .foregroundStyle(anchorSlate)
+                .lineLimit(1)
+            }
           }
           .padding(.leading, 4)
         }
@@ -209,7 +225,7 @@ struct AnchorSessionLiveActivity: Widget {
         Image(systemName: state.symbolName)
           .foregroundStyle(anchorSlate)
       }
-      .keylineTint(anchorIndigo)
+      .keylineTint(anchorSlate)
     }
   }
 }

@@ -56,7 +56,16 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
   );
   // Disables the page scroll while a duration wheel is being dragged, so the
   // gesture stays in the wheel instead of moving the whole screen.
-  const [wheelActive, setWheelActive] = useState(false);
+  // Freeze the page while a wheel is grabbed. Done imperatively via
+  // setNativeProps (no React re-render) so touching a wheel can't trigger a
+  // full-screen re-render mid-gesture — that re-render was the scroll hitch,
+  // and the async state update let the page start scrolling before the freeze
+  // landed. setNativeProps applies on the native thread, instantly.
+  const bodyScrollRef = useRef<ScrollView>(null);
+  const freezeBody = useCallback(
+    (frozen: boolean) => bodyScrollRef.current?.setNativeProps({ scrollEnabled: !frozen }),
+    [],
+  );
   const durationHydrated = useRef(false);
   const [pomodoro,   setPomodoro]   = useState(() => nav.user.pomodoroEnabled);
   const [pomoPreset, setPomoPreset] = useState<PomoPreset>(POMO_PRESETS[0]);
@@ -401,9 +410,9 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
       </View>
 
       <ScrollView
+        ref={bodyScrollRef}
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!wheelActive}
       >
 
         {/* Category badge */}
@@ -434,8 +443,8 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 unit="hours"
                 width={150}
                 onChange={h => setDuration(h * 60 + (duration % 60))}
-                onInteractionStart={() => setWheelActive(true)}
-                onInteractionEnd={() => setWheelActive(false)}
+                onInteractionStart={() => freezeBody(true)}
+                onInteractionEnd={() => freezeBody(false)}
               />
               <WheelPicker
                 values={MINUTES}
@@ -443,8 +452,8 @@ export default function CreateSessionScreen({ nav }: { nav: NavProps }) {
                 unit="min"
                 width={150}
                 onChange={m => setDuration(Math.floor(duration / 60) * 60 + m)}
-                onInteractionStart={() => setWheelActive(true)}
-                onInteractionEnd={() => setWheelActive(false)}
+                onInteractionStart={() => freezeBody(true)}
+                onInteractionEnd={() => freezeBody(false)}
               />
             </View>
           </>

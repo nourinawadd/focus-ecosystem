@@ -24,7 +24,7 @@
         "NSSupportsLiveActivities": true,
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "44",
+      "buildNumber": "45",
       "usesAppleSignIn": true,
       "entitlements": {
         "com.apple.developer.family-controls": true

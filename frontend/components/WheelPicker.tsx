@@ -83,6 +83,7 @@ export default function WheelPicker({
         disableIntervalMomentum
         bounces={false}
         nestedScrollEnabled
+        directionalLockEnabled
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
