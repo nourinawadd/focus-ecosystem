@@ -14,7 +14,6 @@ import { isCalendarSyncEnabled, getTodayEvents, type CalendarEvent } from '../ut
 const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 
 // Determine best productive time from all sessions (same logic as Analytics)
-// TODO: replace with ai logic
 function bestTimeLabel(sessions: SessionRecord[]): string | null {
   const done = sessions.filter(s => s.completed && s.startTime);
   if (done.length === 0) return null;

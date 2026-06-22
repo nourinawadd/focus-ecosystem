@@ -6,12 +6,12 @@ Time / Family Controls), so it is verified **manually** against a development bu
 
 ## Setup
 
-1. Start the backend: `npm --prefix backend run dev` (needs a populated `.env`; see `CLAUDE.md`).
+1. Start the backend: `npm --prefix backend run dev` (needs a populated `.env`; see `backend/.env.example`).
 2. Point the app at your backend: set `EXPO_PUBLIC_API_URL` in `frontend/.env`
    (or edit the base URL in `frontend/api/client.ts`) to your machine's LAN IP,
    e.g. `http://192.168.1.95:5000/api`, so the iPhone can reach it over Wi-Fi.
 3. Launch Metro against the installed dev build: `npx expo start --dev-client`, then open the app.
-4. To exercise social sign-in, configure Google/Apple client IDs (see `CLAUDE.md` env section).
+4. To exercise social sign-in, configure Google/Apple client IDs (see `backend/.env.example`).
 
 ## How to use this checklist
 

@@ -59,7 +59,7 @@ npm install
 npx expo start --dev-client
 ```
 
-The one-time iOS development build setup and the full list of environment variables live in [CLAUDE.md](./CLAUDE.md).
+The one-time iOS development build setup and the full development workflow live in [CONTRIBUTING.md](./CONTRIBUTING.md). Every environment variable is documented in [`backend/.env.example`](./backend/.env.example).
 
 <h2><img src="assets/readme/waves.svg" height="22" alt="" /> Status</h2>
 

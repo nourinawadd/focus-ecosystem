@@ -147,3 +147,9 @@ notes.md
 
 # local AI testing script (contains JWT token)
 backend/test-ai.ps1
+
+# local agent / editor config
+.claude/
+
+# Expo local state
+.expo/
