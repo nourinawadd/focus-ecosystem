@@ -87,65 +87,8 @@ export async function sendPasswordResetEmail(to, code) {
   }
 }
 
-const TESTFLIGHT_URL = process.env.TESTFLIGHT_URL || 'https://testflight.apple.com/join/EYsXpufP';
+const APP_STORE_URL = process.env.APP_STORE_URL || 'https://apps.apple.com/app/id6772034776';
 const CONTACT_TO     = process.env.CONTACT_TO || process.env.BREVO_SENDER || 'anchorr26@gmail.com';
-
-/**
- * Landing-page "get the beta link" autoresponder: emails the subscriber the
- * TestFlight link and a gentle feedback ask. Best-effort; never throws.
- */
-export async function sendBetaInviteEmail(to) {
-  if (!process.env.BREVO_API_KEY) {
-    logger.warn({ to }, 'BREVO_API_KEY not set — beta invite email skipped');
-    return false;
-  }
-  try {
-    const res = await fetch(BREVO_URL, {
-      method:  'POST',
-      headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender:  sender(),
-        to:      [{ email: to }],
-        replyTo: { email: CONTACT_TO, name: 'Anchor' },
-        subject: 'Your Anchor beta link is inside',
-        htmlContent: `
-          <div style="background:#f2f5f7;padding:32px 16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;">
-            <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #d4e0e8;border-radius:16px;overflow:hidden;">
-              <div style="background:#313852;padding:24px 32px;text-align:center;">
-                <span style="color:#fff;font-size:22px;font-weight:700;letter-spacing:.5px;">Anchor</span>
-              </div>
-              <div style="padding:32px 32px 8px;">
-                <h1 style="margin:0 0 12px;font-size:22px;color:#0f1e27;">You're in. Welcome aboard.</h1>
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">Thanks for wanting to focus better with Anchor. The beta is live on TestFlight, and you can have it on your iPhone in about a minute.</p>
-                <div style="text-align:center;margin:28px 0;">
-                  <a href="${TESTFLIGHT_URL}" style="display:inline-block;background:#313852;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:99px;">Open the TestFlight beta</a>
-                </div>
-                <p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#4a5e6a;">Two quick steps:</p>
-                <ol style="margin:0 0 18px 18px;font-size:15px;line-height:1.8;color:#4a5e6a;">
-                  <li>Install Apple's free TestFlight app if you don't already have it.</li>
-                  <li>Tap the button above to add Anchor, then open it and create your account.</li>
-                </ol>
-                <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:#4a5e6a;">One small favour: after a session or two, we would love to know what you think. What felt great, what got in your way, anything you wish it did. Just reply to this email and it comes straight to us.</p>
-                <p style="margin:0 0 2px;font-size:15px;color:#4a5e6a;">Thanks for helping us build it,</p>
-                <p style="margin:0 0 22px;font-size:15px;color:#0f1e27;font-weight:600;">The Anchor team</p>
-              </div>
-              <div style="border-top:1px solid #d4e0e8;padding:16px 32px;background:#f8fafb;">
-                <p style="margin:0;font-size:12px;line-height:1.6;color:#7a909c;">You're getting this because you asked for the Anchor beta link on our site. If that wasn't you, you can ignore this email. Questions? <a href="mailto:${CONTACT_TO}" style="color:#4a8fa8;">${CONTACT_TO}</a></p>
-              </div>
-            </div>
-          </div>`,
-      }),
-    });
-    if (!res.ok) {
-      logger.error({ to, status: res.status, body: await res.text() }, 'Brevo beta invite failed');
-      return false;
-    }
-    return true;
-  } catch (err) {
-    logger.error({ to, err: err.message }, 'Brevo beta invite threw');
-    return false;
-  }
-}
 
 /**
  * Landing-page contact form: emails the team the visitor's message, with
@@ -217,9 +160,9 @@ export async function sendContactAckEmail(to, name) {
                 <h1 style="margin:0 0 12px;font-size:22px;color:#0f1e27;">Thanks for getting in touch.</h1>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">${greeting}</p>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">We have your message and someone on the team will get back to you soon. If you need to add anything, just reply to this email and it reaches us directly.</p>
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">While you wait, Anchor is live on TestFlight if you would like to try it:</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#4a5e6a;">While you wait, Anchor is on the App Store if you would like to try it:</p>
                 <div style="text-align:center;margin:24px 0;">
-                  <a href="${TESTFLIGHT_URL}" style="display:inline-block;background:#313852;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:99px;">Open the TestFlight beta</a>
+                  <a href="${APP_STORE_URL}" style="display:inline-block;background:#313852;color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:99px;">Download on the App Store</a>
                 </div>
                 <p style="margin:0 0 2px;font-size:15px;color:#4a5e6a;">Talk soon,</p>
                 <p style="margin:0 0 22px;font-size:15px;color:#0f1e27;font-weight:600;">The Anchor team</p>
