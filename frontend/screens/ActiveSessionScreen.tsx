@@ -592,7 +592,7 @@ export default function ActiveSessionScreen({ nav }: { nav: NavProps }) {
           </Text>
         </CircularProgress>
 
-        <Text style={styles.sessionName}>{sessionName}</Text>
+        <Text style={styles.sessionName} numberOfLines={2} ellipsizeMode="tail">{sessionName}</Text>
         <Text style={styles.metaLine}>{metaLine}</Text>
 
         {isPomo && maxRounds > 1 && (
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   timerText:  { fontSize: 52, fontWeight: '700', color: colors.white, letterSpacing: 1 },
   timerSub:   { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.5)', letterSpacing: 2, marginTop: 6 },
 
-  sessionName:{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginTop: spacing.xs },
+  sessionName:{ fontSize: fontSize.xxl, fontWeight: '700', color: colors.white, marginTop: spacing.xs, textAlign: 'center', paddingHorizontal: spacing.md },
   metaLine:   { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.55)', marginTop: spacing.sm },
 
   dotsRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
